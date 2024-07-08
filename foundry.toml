@@ -2,9 +2,10 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-
+via-ir = true
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 
 remappings = [
+    "@blueberry-v2/=src/",
     "@openzeppelin/=lib/openzeppelin-contracts/contracts/"
 ]

@@ -9,16 +9,16 @@
 */
 pragma solidity ^0.8.26;
 
-library BBErrors {
-    /*///////////////////////////////////////////////////////////////
-                        MONEY MARKET ERRORS
-    //////////////////////////////////////////////////////////////*/
-    /// @notice Error when the recipient address is address zero.
-    error AddressZero();
-
-    /// @notice Error when a user tries to withdraw more than their balance.
-    error InsufficientBalance();
-
-    /// @notice Error when a user tries to interact with a market that doesnt exist
-    error INVALID_MARKET();
+/**
+ * @title IBlueberryGarden
+ * @notice Interface for the main entrypoint for all interactions within Blueberry Finance.
+ */
+interface IBlueberryMarket {
+    /**
+     * @notice Returns the exchange rate of underlying asset to its respective market.
+     * @dev Since we dont have interest rates at this stage of development,
+     *      bToken shares are 1:1 with assets.
+     * @param asset The address of the underlying asset.
+     */
+    function exchangeRate(address asset) external view returns (uint256);
 }
