@@ -9,10 +9,11 @@
 */
 pragma solidity ^0.8.26;
 
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {FixedPointMathLib as FixedPoint} from "solmate/utils/FixedPointMathLib.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/token/ERC20/utils/SafeERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {BBErrors as Errors} from "@blueberry-v2/helpers/BBErrors.sol";
 
@@ -20,8 +21,7 @@ import {IBlueberryMarket} from "@blueberry-v2/interfaces/IBlueberryMarket.sol";
 import {ERC4626MultiToken} from "./ERC4626MultiToken.sol";
 
 // TODO:
-// 1. Scale shares to 18 decimals
-// 2. Permissioned Setter for creating/adding markets
+// 1. Permissioned Setter for creating/adding markets
 
 /**
  * @title BlueberryMarket
@@ -32,7 +32,7 @@ import {ERC4626MultiToken} from "./ERC4626MultiToken.sol";
  * @notice The money market for Blueberry Finance.
  */
 abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
-    using FixedPointMathLib for uint256;
+    using FixedPoint for uint256;
     using SafeERC20 for IERC20;
 
     /*///////////////////////////////////////////////////////////////
@@ -110,7 +110,8 @@ abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
         address bToken = getMarket(asset);
 
         // Round down in favor of the pool
-        shares = amount.mulWadDown(exchangeRate(bToken));
+        uint256 scaler = 10 ** IERC20Metadata(asset).decimals();
+        shares = amount.mulWadDown(exchangeRate(bToken)) / scaler;
 
         address account = _getAccount(bToken, msg.sender, onBehalfOf);
         IERC20(asset).safeTransferFrom(account, address(this), amount);
@@ -156,7 +157,8 @@ abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
         _burn(bToken, account, shares);
 
         // Round up in favor of the pool
-        amount = shares.divWadUp(exchangeRate(bToken));
+        uint256 scaler = 10 ** (18 - IERC20Metadata(asset).decimals());
+        amount = shares.divWadUp(exchangeRate(bToken) * scaler);
 
         // Total supply of bToken's will always be greater than or equal to
         // assets supplied so no need to check for underflow.
