@@ -56,6 +56,7 @@ contract BToken is IERC4626, IERC20Permit {
     /*///////////////////////////////////////////////////////////////
                                 Modifiers
     //////////////////////////////////////////////////////////////*/
+
     /// @notice Caller must be BlueberryGarden
     modifier onlyGarden() {
         require(
@@ -68,6 +69,7 @@ contract BToken is IERC4626, IERC20Permit {
     /*///////////////////////////////////////////////////////////////
                                 Constructor
     //////////////////////////////////////////////////////////////*/
+
     constructor(
         IBlueberryGarden blueberryGarden,
         address asset_,

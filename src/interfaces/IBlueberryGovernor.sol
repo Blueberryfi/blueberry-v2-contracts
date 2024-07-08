@@ -9,41 +9,29 @@
 */
 pragma solidity ^0.8.26;
 
-import {IBlueberryGarden} from "@blueberry-v2/interfaces/IBlueberryGarden.sol";
-import {BlueberryGovernor} from "@blueberry-v2/BlueberryGovernor.sol";
-
 /**
- * @title BlueberryGarden
- * @notice The main entrypoint for all interactions within Blueberry Finance.
+ * @title IBlueberryGarden
+ * @notice Interface for the main entrypoint for all interactions within Blueberry Finance.
  */
-contract BlueberryGarden is IBlueberryGarden, BlueberryGovernor {
-    /*///////////////////////////////////////////////////////////////
-                            Constructor
-    //////////////////////////////////////////////////////////////*/
-
-    constructor(address admin) BlueberryGovernor(admin) {}
-
-    /*///////////////////////////////////////////////////////////////
-                        Money-Market Functions
-    //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc IBlueberryGarden
-    function lend(
+interface IBlueberryGovernor {
+    /**
+     * @notice Adds a new market to the Blueberry Money Market.
+     * @dev This function is only callable by a full access admin.
+     * @param asset The address of the underlying asset for the new market.
+     * @param name The name of the new market. (e.g. "Blueberry Wrapped Ether")
+     * @param symbol The symbol of the new market. (e.g. "bWETH")
+     * @return bToken The address of the newly created bToken.
+     */
+    function addMarket(
         address asset,
-        address onBehalfOf,
-        address receiver,
-        uint256 amount
-    ) external override returns (uint256) {
-        return _lend(asset, onBehalfOf, receiver, amount);
-    }
+        string memory name,
+        string memory symbol
+    ) external returns (address);
 
-    /// @inheritdoc IBlueberryGarden
-    function redeem(
-        address bToken,
-        address onBehalfOf,
-        address receiver,
-        uint256 shares
-    ) external override returns (uint256) {
-        return _redeem(bToken, onBehalfOf, receiver, shares);
-    }
+    /**
+     * @notice Check the role of an address.
+     * @param account The address of the account to check.
+     * @return role The role of the account in bytes32.
+     */
+    function role(address account) external view returns (bytes32);
 }

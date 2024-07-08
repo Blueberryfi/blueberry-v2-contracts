@@ -17,11 +17,10 @@ import {IERC20Metadata} from "@openzeppelin/token/ERC20/extensions/IERC20Metadat
 
 import {BBErrors as Errors} from "@blueberry-v2/helpers/BBErrors.sol";
 
-import {IBlueberryMarket} from "@blueberry-v2/interfaces/IBlueberryMarket.sol";
+import {BToken} from "./BToken.sol";
 import {ERC4626MultiToken} from "./ERC4626MultiToken.sol";
 
-// TODO:
-// 1. Permissioned Setter for creating/adding markets
+import {IBlueberryMarket} from "@blueberry-v2/interfaces/IBlueberryMarket.sol";
 
 /**
  * @title BlueberryMarket
@@ -76,7 +75,7 @@ abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Maps underlying assets to a given bToken.
-    mapping(address => address) private _bTokens;
+    mapping(address => address) internal _bTokens;
 
     /*///////////////////////////////////////////////////////////////
                                 Modifiers
