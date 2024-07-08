@@ -17,6 +17,10 @@ import {BlueberryMarket} from "@blueberry-v2/money-market/BlueberryMarket.sol";
  * @notice The main entrypoint for all interactions within Blueberry Finance.
  */
 contract BlueberryGarden is IBlueberryGarden, BlueberryMarket {
+    /*///////////////////////////////////////////////////////////////
+                        Money-Market Functions
+    //////////////////////////////////////////////////////////////*/
+
     /// @inheritdoc IBlueberryGarden
     function lend(
         address asset,

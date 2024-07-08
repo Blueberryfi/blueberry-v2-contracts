@@ -84,7 +84,7 @@ abstract contract ERC4626MultiToken is IERC4626MultiToken {
     }
 
     /*///////////////////////////////////////////////////////////////
-                    ERC20 Token Transfer Accounting
+                            ERC20 Accounting
     //////////////////////////////////////////////////////////////*/
 
     // TODO: Require a bToken to call
@@ -132,17 +132,6 @@ abstract contract ERC4626MultiToken is IERC4626MultiToken {
     }
 
     /// @inheritdoc IERC4626MultiToken
-    function asset(address bToken) public view override returns (address token) {
-        token = _assets[bToken];
-        require(token != address(0), Errors.INVALID_MARKET());
-    }
-
-    /// @inheritdoc IERC4626MultiToken
-    function totalAssets(address asset_) public view override returns (uint256) {
-        return _totalAssets[asset_];
-    }
-
-    /// @inheritdoc IERC4626MultiToken
     function totalSupply(address bToken) external view returns (uint256) {
         return _totalSupply[bToken];
     }
@@ -163,6 +152,29 @@ abstract contract ERC4626MultiToken is IERC4626MultiToken {
     ) public view returns (uint256) {
         return _allowances[bToken][owner][spender];
     }
+
+    /*///////////////////////////////////////////////////////////////
+                          ERC4626 Token Info
+    //////////////////////////////////////////////////////////////*/
+
+    /// @inheritdoc IERC4626MultiToken
+    function asset(
+        address bToken
+    ) public view override returns (address token) {
+        token = _assets[bToken];
+        require(token != address(0), Errors.INVALID_MARKET());
+    }
+
+    /// @inheritdoc IERC4626MultiToken
+    function totalAssets(
+        address asset_
+    ) public view override returns (uint256) {
+        return _totalAssets[asset_];
+    }
+
+    /*///////////////////////////////////////////////////////////////
+                          Internal Helpers
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Logic for transfering bTokens
     function _transfer(

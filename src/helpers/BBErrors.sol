@@ -11,7 +11,7 @@ pragma solidity ^0.8.26;
 
 library BBErrors {
     /*///////////////////////////////////////////////////////////////
-                        MONEY MARKET ERRORS
+                          Money-Market Errors
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Error when a user tries to interact with a market that doesnt exist.

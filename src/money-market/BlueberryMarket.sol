@@ -169,6 +169,10 @@ abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
         emit Redeem(asset, account, receiver, amount, shares);
     }
 
+    /*///////////////////////////////////////////////////////////////
+                            Market Info
+    //////////////////////////////////////////////////////////////*/
+
     /**
      * @notice Get the associated bToken for a given asset.
      * @param asset The address of the underlying asset for the market.
@@ -192,6 +196,10 @@ abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
         uint256 supply = _totalSupply[bToken];
         return supply == 0 ? 1e18 : (_totalAssets[asset] * 1e18) / supply;
     }
+
+    /*///////////////////////////////////////////////////////////////
+                          Internal Helpers
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @notice Sets the account that the lend or withdraw will be processed for.

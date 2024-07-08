@@ -218,7 +218,8 @@ contract BToken is IERC4626, IERC20Permit {
      * @notice Emits the Transfer event.
      * @dev This function can only be called by the BlueberryGarden.
      *      Is used to keep bToken's ERC20 complient
-     */ function emitApproval(
+     */
+    function emitApproval(
         address owner,
         address spender,
         uint256 amount
