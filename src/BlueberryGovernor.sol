@@ -33,7 +33,7 @@ contract BlueberryGovernor is IBlueberryGovernor, BlueberryMarket {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Full access role. Can perform any action within the BlueberryGovernor.
-    bytes32 public constant FULL_ACCESS = "FULL_ACCESS";
+    bytes32 private constant _FULL_ACCESS = keccak256("FULL_ACCESS");
 
     /*///////////////////////////////////////////////////////////////
                                 Modifiers
@@ -50,11 +50,11 @@ contract BlueberryGovernor is IBlueberryGovernor, BlueberryMarket {
     //////////////////////////////////////////////////////////////*/
 
     constructor(address admin) {
-        _roles[admin] = FULL_ACCESS;
+        _roles[admin] = _FULL_ACCESS;
     }
 
     /*///////////////////////////////////////////////////////////////
-                        Governance Setters
+                         Governance Setters
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IBlueberryGovernor
@@ -62,7 +62,7 @@ contract BlueberryGovernor is IBlueberryGovernor, BlueberryMarket {
         address asset,
         string memory name,
         string memory symbol
-    ) external hasRole(FULL_ACCESS) returns (address bToken) {
+    ) external hasRole(fullAccess()) returns (address bToken) {
         require(_bTokens[asset] == address(0), Errors.MARKET_ALREADY_EXISTS());
         bToken = address(
             new BToken(IBlueberryGarden(address(this)), asset, name, symbol)
@@ -71,8 +71,17 @@ contract BlueberryGovernor is IBlueberryGovernor, BlueberryMarket {
         _assets[bToken] = asset;
     }
 
+    /*///////////////////////////////////////////////////////////////
+                                Roles
+    //////////////////////////////////////////////////////////////*/
+
     /// @inheritdoc IBlueberryGovernor
     function role(address account) public view returns (bytes32) {
         return _roles[account];
+    }
+
+    /// @inheritdoc IBlueberryGovernor
+    function fullAccess() public pure returns (bytes32) {
+        return _FULL_ACCESS;
     }
 }

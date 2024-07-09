@@ -34,4 +34,7 @@ interface IBlueberryGovernor {
      * @return role The role of the account in bytes32.
      */
     function role(address account) external view returns (bytes32);
+
+    /// @notice The FULL_ACCESS role. Which can perform any action within the BlueberryGovernor.
+    function fullAccess() external pure returns (bytes32);
 }
