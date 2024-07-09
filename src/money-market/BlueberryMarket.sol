@@ -71,13 +71,6 @@ abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
     );
 
     /*///////////////////////////////////////////////////////////////
-                                Storage
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Maps underlying assets to a given bToken.
-    mapping(address => address) internal _bTokens;
-
-    /*///////////////////////////////////////////////////////////////
                                 Modifiers
     //////////////////////////////////////////////////////////////*/
 
@@ -126,7 +119,6 @@ abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
         emit Lend(asset, account, receiver, amount, amount);
     }
 
-    // TODO: Validation check on bToken market
     /**
      * @notice Redeems the market's bToken, therefor removing the deposited underlying asset.
      * @param bToken The bToken that we are redeeming underlying assets from.

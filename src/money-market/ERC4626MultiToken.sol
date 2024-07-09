@@ -26,6 +26,9 @@ abstract contract ERC4626MultiToken is IERC4626MultiToken {
                                 Storage
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Maps underlying assets to a given bToken.
+    mapping(address => address) internal _bTokens;
+
     /// @notice Maps a bToken to its underlying asset.
     mapping(address => address) internal _assets;
 
@@ -41,6 +44,14 @@ abstract contract ERC4626MultiToken is IERC4626MultiToken {
     /// @notice Maps a user's address to their allowance of a specific bToken (owner -> spender -> allowance).
     mapping(address => mapping(address => mapping(address => uint256)))
         internal _allowances;
+
+    /*///////////////////////////////////////////////////////////////
+                          Valid bToken
+    //////////////////////////////////////////////////////////////*/
+    modifier validMarket(address bToken) {
+        require(_bTokens[bToken] != address(0), Errors.INVALID_MARKET());
+        _;
+    }
 
     /*///////////////////////////////////////////////////////////////
                           Minting & Burning
@@ -87,18 +98,15 @@ abstract contract ERC4626MultiToken is IERC4626MultiToken {
                             ERC20 Accounting
     //////////////////////////////////////////////////////////////*/
 
-    // TODO: Require a bToken to call
     /// @inheritdoc IERC4626MultiToken
     function approve(
         address bToken,
         address owner,
         address spender,
         uint256 amount
-    ) public override returns (bool) {
+    ) public override validMarket(bToken) returns (bool) {
         require(
-            bToken != address(0) &&
-                owner != address(0) &&
-                spender != address(0),
+            owner != address(0) && spender != address(0),
             Errors.ADDRESS_ZERO()
         );
 
@@ -115,7 +123,7 @@ abstract contract ERC4626MultiToken is IERC4626MultiToken {
         address from,
         address to,
         uint256 amount
-    ) external override returns (bool) {
+    ) external override validMarket(bToken) returns (bool) {
         return _transfer(bToken, from, to, amount);
     }
 
@@ -126,7 +134,7 @@ abstract contract ERC4626MultiToken is IERC4626MultiToken {
         address from,
         address to,
         uint256 amount
-    ) external override returns (bool) {
+    ) external override validMarket(bToken) returns (bool) {
         _spendAllowance(bToken, from, spender, amount);
         return _transfer(bToken, from, to, amount);
     }
@@ -183,11 +191,7 @@ abstract contract ERC4626MultiToken is IERC4626MultiToken {
         address to,
         uint256 amount
     ) internal returns (bool) {
-        // TODO: Maybe replace with Valid market check
-        require(
-            bToken != address(0) && from != address(0) && to != address(0),
-            Errors.ADDRESS_ZERO()
-        );
+        require(from != address(0) && to != address(0), Errors.ADDRESS_ZERO());
 
         uint256 fromBalance = _balance[bToken][from];
         require(fromBalance >= amount, Errors.INSUFFICIENT_BALANCE());
