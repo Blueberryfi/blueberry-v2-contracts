@@ -15,6 +15,7 @@ import {BToken} from "@blueberry-v2/money-market/BToken.sol";
 
 import {IBlueberryGarden} from "@blueberry-v2/interfaces/IBlueberryGarden.sol";
 import {IBlueberryGovernor} from "@blueberry-v2/interfaces/IBlueberryGovernor.sol";
+import "forge-std/console2.sol";
 
 /**
  * @title BlueberryGovernor
@@ -22,7 +23,7 @@ import {IBlueberryGovernor} from "@blueberry-v2/interfaces/IBlueberryGovernor.so
  */
 contract BlueberryGovernor is IBlueberryGovernor, BlueberryMarket {
     /*///////////////////////////////////////////////////////////////
-                                Admin Roles
+                                Storage
     //////////////////////////////////////////////////////////////*/
 
     /// @notice A mapping of addresses to their respective roles.
@@ -41,7 +42,7 @@ contract BlueberryGovernor is IBlueberryGovernor, BlueberryMarket {
 
     /// @notice Ensure that the caller has a specific role.
     modifier hasRole(bytes32 role_) {
-        require(role(msg.sender) != role_, Errors.UNAUTHORIZED());
+        require(role(msg.sender) == role_, Errors.UNAUTHORIZED());
         _;
     }
 
@@ -50,7 +51,9 @@ contract BlueberryGovernor is IBlueberryGovernor, BlueberryMarket {
     //////////////////////////////////////////////////////////////*/
 
     constructor(address admin) {
+        require(admin != address(0), Errors.ADDRESS_ZERO());
         _roles[admin] = _FULL_ACCESS;
+        emit RoleSet(admin, _FULL_ACCESS);
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -64,24 +67,25 @@ contract BlueberryGovernor is IBlueberryGovernor, BlueberryMarket {
         string memory symbol
     ) external hasRole(fullAccess()) returns (address bToken) {
         require(_bTokens[asset] == address(0), Errors.MARKET_ALREADY_EXISTS());
+        require(asset != address(0), Errors.ADDRESS_ZERO());
+
         bToken = address(
             new BToken(IBlueberryGarden(address(this)), asset, name, symbol)
         );
         _bTokens[asset] = bToken;
         _assets[bToken] = asset;
+        // TODO: Think about caching token decimals
+        emit NewMarket(asset, name, symbol);
     }
 
-    /**
-     * @notice Sets the role for a given account.
-     * @param account The account that the role is being set for.
-     * @param role_ The role being given to the account.
-     */
+    /// @inheritdoc IBlueberryGovernor
     function setRole(
         address account,
-        bytes calldata role_
+        bytes32 role_
     ) external hasRole(fullAccess()) {
         require(account != address(0), Errors.ADDRESS_ZERO());
-        _roles[account] == role_;
+        _roles[account] = role_;
+        emit RoleSet(account, role_);
     }
 
     /*///////////////////////////////////////////////////////////////

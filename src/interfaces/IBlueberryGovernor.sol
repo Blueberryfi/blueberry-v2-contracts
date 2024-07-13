@@ -14,6 +14,29 @@ pragma solidity ^0.8.26;
  * @notice Interface for the main entrypoint for all interactions within Blueberry Finance.
  */
 interface IBlueberryGovernor {
+    /*///////////////////////////////////////////////////////////////
+                                Events
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Emits when a new market is added.
+     * @param asset The underlying asset for the market.
+     * @param name The bToken's name.
+     * @param symbol The bToken's symbol.
+     */
+    event NewMarket(address indexed asset, string name, string symbol);
+
+    /**
+     * @notice Emits when a role is set for an account.
+     * @param account The account that the role is being set for.
+     * @param role_ The role being given to the account.
+     */
+    event RoleSet(address indexed account, bytes32 indexed role_);
+
+    /*///////////////////////////////////////////////////////////////
+                         Governance Setters
+    //////////////////////////////////////////////////////////////*/
+
     /**
      * @notice Adds a new market to the Blueberry Money Market.
      * @dev This function is only callable by a full access admin.
@@ -27,6 +50,17 @@ interface IBlueberryGovernor {
         string memory name,
         string memory symbol
     ) external returns (address);
+
+    /**
+     * @notice Sets the role for a given account.
+     * @param account The account that the role is being set for.
+     * @param role_ The role being given to the account.
+     */
+    function setRole(address account, bytes32 role_) external;
+
+    /*///////////////////////////////////////////////////////////////
+                                Roles
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @notice Check the role of an address.

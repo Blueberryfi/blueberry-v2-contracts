@@ -35,42 +35,6 @@ abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
     using SafeERC20 for IERC20;
 
     /*///////////////////////////////////////////////////////////////
-                                Events
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Emit when a user lends assets into the money market.
-     * @param asset The underlying asset being lent.
-     * @param account The address of the user lending the assets.
-     * @param recipient The address of the user receiving the bToken.
-     * @param amounts The amount of assets lent.
-     * @param shares The number of shares of bToken's minted.
-     */
-    event Lend(
-        address indexed asset,
-        address indexed account,
-        address indexed recipient,
-        uint256 amounts,
-        uint256 shares
-    );
-
-    /**
-     * @notice Emit when a user redeems all their bTokens from the money market.
-     * @param asset The underlying asset being withdrawn.
-     * @param account The address of the user withdrawing the assets.
-     * @param recipient The address of the user receiving the assets.
-     * @param amounts The amount of assets withdrawn.
-     * @param shares The number of shares of bToken's burned.
-     */
-    event Redeem(
-        address indexed asset,
-        address indexed account,
-        address indexed recipient,
-        uint256 amounts,
-        uint256 shares
-    );
-
-    /*///////////////////////////////////////////////////////////////
                                 Modifiers
     //////////////////////////////////////////////////////////////*/
 
@@ -99,7 +63,7 @@ abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
         address receiver,
         uint256 amount
     ) internal validRecipient(receiver) returns (uint256 shares) {
-        address bToken = getMarket(asset);
+        address bToken = market(asset);
 
         // Round down in favor of the pool
         uint256 scaler = 10 ** IERC20Metadata(asset).decimals();
@@ -166,26 +130,17 @@ abstract contract BlueberryMarket is IBlueberryMarket, ERC4626MultiToken {
                             Market Info
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Get the associated bToken for a given asset.
-     * @param asset The address of the underlying asset for the market.
-     * @return bToken The address of the market (bToken).
-     */
-    function getMarket(address asset) public view returns (address bToken) {
+    /// @inheritdoc IBlueberryMarket
+    function market(address asset) public view returns (address bToken) {
         bToken = _bTokens[asset];
         require(bToken != address(0), Errors.INVALID_MARKET());
     }
 
-    /**
-     * @notice Returns the exchange rate of underlying asset to its respective market.
-     * @dev Since we dont have interest rates at this stage of development,
-     *      bToken shares are 1:1 with assets.
-     * @param asset The address of the underlying asset.
-     */
+    /// @inheritdoc IBlueberryMarket
     function exchangeRate(
         address asset
     ) public view override returns (uint256) {
-        address bToken = getMarket(asset);
+        address bToken = market(asset);
         uint256 supply = _totalSupply[bToken];
         return supply == 0 ? 1e18 : (_totalAssets[asset] * 1e18) / supply;
     }

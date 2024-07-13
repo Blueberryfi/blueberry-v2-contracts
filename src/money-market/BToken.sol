@@ -31,6 +31,7 @@ contract BToken is IERC4626, IERC20Permit {
     /*///////////////////////////////////////////////////////////////
                                 Storage
     //////////////////////////////////////////////////////////////*/
+
     /// @notice The Blueberry Garden contract.
     IBlueberryGarden private immutable _blueberryGarden;
 
