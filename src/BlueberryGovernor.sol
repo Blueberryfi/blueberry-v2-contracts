@@ -71,6 +71,19 @@ contract BlueberryGovernor is IBlueberryGovernor, BlueberryMarket {
         _assets[bToken] = asset;
     }
 
+    /**
+     * @notice Sets the role for a given account.
+     * @param account The account that the role is being set for.
+     * @param role_ The role being given to the account.
+     */
+    function setRole(
+        address account,
+        bytes calldata role_
+    ) external hasRole(fullAccess()) {
+        require(account != address(0), Errors.ADDRESS_ZERO());
+        _roles[account] == role_;
+    }
+
     /*///////////////////////////////////////////////////////////////
                                 Roles
     //////////////////////////////////////////////////////////////*/
