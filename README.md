@@ -11,7 +11,8 @@ For more information on Blueberry V2, please refer to our [documentation](https:
 
 ### Repository Structure
 - `src/BlueberryGarden.sol`: The entry point and main contract of the Blueberry protocol. This contract serves as the money market for lending and borrowing assets, as well as routing those borrowed funds to the appropriate trading strategies.
-- `src/BToken.sol`: The ERC20 token contract that represents the user's share of the Blueberry money market. Users receive BToken when they deposit assets into the `BlueberryGarden`.
+- `src/money-market`: Directory containing modules relavent to the Blueberry Money Market. These files are soley used for basic lend, borrow capabilities.
+- `tests`: A testing suite for Blueberry V2 containing units tests, fuzz-tests and forked tests.
 
 ### Repository Setup
 1. Clone the repository
