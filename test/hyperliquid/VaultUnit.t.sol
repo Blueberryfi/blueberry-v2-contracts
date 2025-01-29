@@ -18,7 +18,7 @@ contract VaultUnitTest is Test {
     function setUp() public {
         owner = makeAddr("owner");
         l1Vault = makeAddr("l1Vault");
-        
+
         // Deploy mock asset
         asset = new MockERC20("Test USDC", "USDC", 6);
     }
@@ -70,49 +70,33 @@ contract VaultUnitTest is Test {
 
     function test_EscrowDeployment() public {
         uint8 escrowCount = 3;
-        
+
         // Expect EscrowDeployed events
         for (uint8 i = 0; i < escrowCount; i++) {
             vm.expectEmit(false, false, false, false);
             emit EscrowDeployed(address(0)); // Ignore the address
         }
 
-        vault = new HyperEvmVault(
-            "blHLP",
-            "blHLP",
-            escrowCount,
-            address(asset),
-            l1Vault,
-            owner
-        );
+        vault = new HyperEvmVault("blHLP", "blHLP", escrowCount, address(asset), l1Vault, owner);
     }
 
     function test_OwnershipTransfer() public {
-        vault = new HyperEvmVault(
-            "blHLP",
-            "blHLP",
-            7,
-            address(asset),
-            l1Vault,
-            owner
-        );
+        vault = new HyperEvmVault("blHLP", "blHLP", 7, address(asset), l1Vault, owner);
 
         address newOwner = makeAddr("newOwner");
-        
+
         // Transfer ownership
         vm.prank(owner);
         vault.transferOwnership(newOwner);
-        
+
         // Accept ownership
         vm.prank(newOwner);
         vault.acceptOwnership();
-        
+
         assertEq(vault.owner(), newOwner);
     }
 
     /*//////////////////////////////////////////////////////////////
                             Deposit Tests
     //////////////////////////////////////////////////////////////*/
-
-    
 }

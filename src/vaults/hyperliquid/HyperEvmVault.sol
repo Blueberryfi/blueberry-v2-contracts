@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {ERC20, IERC20} from "@openzeppelin/token/ERC20/ERC20.sol";
-import {Ownable, Ownable2Step} from "@openzeppelin/access/Ownable2Step.sol";
-import {ReentrancyGuard} from "@openzeppelin/utils/ReentrancyGuard.sol";
-import {SafeERC20} from "@openzeppelin/token/ERC20/utils/SafeERC20.sol";
-import {IERC4626} from "@openzeppelin/interfaces/IERC4626.sol";
+import {ERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {BlueberryErrors as Errors} from "../../helpers/BlueberryErrors.sol";
 
@@ -59,28 +59,13 @@ contract HyperEvmVault is IHyperEvmVault, ERC20, Ownable2Step, ReentrancyGuard {
                             External Functions
     //////////////////////////////////////////////////////////////*/
 
-    function deposit(
-        uint256 assets,
-        address receiver
-    ) external override returns (uint256 shares) {}
+    function deposit(uint256 assets, address receiver) external override returns (uint256 shares) {}
 
-    function mint(
-        uint256 shares,
-        address receiver
-    ) external override returns (uint256 assets) {}
+    function mint(uint256 shares, address receiver) external override returns (uint256 assets) {}
 
-    function withdraw(
-        uint256 assets,
-        address receiver,
-        address owner
-    ) external override returns (uint256 shares) {}
+    function withdraw(uint256 assets, address receiver, address owner) external override returns (uint256 shares) {}
 
-    function redeem(
-        uint256 shares,
-        address receiver,
-        address owner
-    ) external override returns (uint256 assets) {}
-
+    function redeem(uint256 shares, address receiver, address owner) external override returns (uint256 assets) {}
 
     /*//////////////////////////////////////////////////////////////
                             Internal Functions
@@ -109,50 +94,25 @@ contract HyperEvmVault is IHyperEvmVault, ERC20, Ownable2Step, ReentrancyGuard {
         return _l1Vault;
     }
 
-    function totalAssets()
-        external
-        view
-        override
-        returns (uint256 totalManagedAssets)
-    {}
+    function totalAssets() external view override returns (uint256 totalManagedAssets) {}
 
-    function convertToShares(
-        uint256 assets
-    ) external view override returns (uint256 shares) {}
+    function convertToShares(uint256 assets) external view override returns (uint256 shares) {}
 
-    function convertToAssets(
-        uint256 shares
-    ) external view override returns (uint256 assets) {}
+    function convertToAssets(uint256 shares) external view override returns (uint256 assets) {}
 
-    function maxDeposit(
-        address receiver
-    ) external view override returns (uint256 maxAssets) {}
+    function maxDeposit(address receiver) external view override returns (uint256 maxAssets) {}
 
-    function previewDeposit(
-        uint256 assets
-    ) external view override returns (uint256 shares) {}
+    function previewDeposit(uint256 assets) external view override returns (uint256 shares) {}
 
-    function maxMint(
-        address receiver
-    ) external view override returns (uint256 maxShares) {}
+    function maxMint(address receiver) external view override returns (uint256 maxShares) {}
 
-    function previewMint(
-        uint256 shares
-    ) external view override returns (uint256 assets) {}
+    function previewMint(uint256 shares) external view override returns (uint256 assets) {}
 
-    function maxWithdraw(
-        address owner
-    ) external view override returns (uint256 maxAssets) {}
+    function maxWithdraw(address owner) external view override returns (uint256 maxAssets) {}
 
-    function previewWithdraw(
-        uint256 assets
-    ) external view override returns (uint256 shares) {}
+    function previewWithdraw(uint256 assets) external view override returns (uint256 shares) {}
 
-    function maxRedeem(
-        address owner
-    ) external view override returns (uint256 maxShares) {}
+    function maxRedeem(address owner) external view override returns (uint256 maxShares) {}
 
-    function previewRedeem(
-        uint256 shares
-    ) external view override returns (uint256 assets) {}
+    function previewRedeem(uint256 shares) external view override returns (uint256 assets) {}
 }
