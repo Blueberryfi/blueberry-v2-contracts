@@ -19,4 +19,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when the collateral is not supported
     error COLLATERAL_NOT_SUPPORTED();
+
+    /// @notice Error thrown when the sender is not the vault
+    error INVALID_SENDER();
 }
