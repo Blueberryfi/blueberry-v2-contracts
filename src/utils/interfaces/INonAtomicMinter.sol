@@ -23,9 +23,10 @@ interface INonAtomicMinter {
     /**
      * @notice Emitted when a user is minted receipt tokens
      * @param user The address of the user that was minted
-     * @param amount The amount of receipt tokens minted
+     * @param processedAmount The amount of underlying tokens that were processed for this mint
+     * @param mintedAmount The amount of receipt tokens minted for the user
      */
-    event Mint(address indexed user, address indexed token, uint256 amount);
+    event Mint(address indexed user, uint256 processedAmount, uint256 mintedAmount);
 
     /*//////////////////////////////////////////////////////////////
                                 Structs
@@ -67,17 +68,20 @@ interface INonAtomicMinter {
      * @notice Mints receipt tokens for a user
      * @dev This function is only callable by the MINTER_ROLE
      * @param user User to mint for
-     * @param amount Amount of tokens to mint
+     * @param processedAmount Amount of underlying tokens that were processed for this mint
+     * @param mintedAmount Amount of receipt tokens to mint for the user
      */
-    function mint(address user, uint256 amount) external;
+    function mint(address user, uint256 processedAmount, uint256 mintedAmount) external;
 
     /**
      * @notice Mints receipt tokens for multiple users
      * @dev This function is only callable by the MINTER_ROLE
      * @param users An array of user addresses to mint for
-     * @param amounts An array of amounts of tokens to mint
+     * @param processedAmounts An array of amounts of underlying tokens that were processed for this mint
+     * @param mintedAmounts An array of amounts of receipt tokens to mint for the users
      */
-    function batchMint(address[] calldata users, uint256[] calldata amounts) external;
+    function batchMint(address[] calldata users, uint256[] calldata processedAmounts, uint256[] calldata mintedAmounts)
+        external;
 
     /**
      * @notice Processes a user's deposit request

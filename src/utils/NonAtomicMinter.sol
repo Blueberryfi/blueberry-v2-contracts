@@ -7,7 +7,8 @@ import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Ini
 import {OwnableUpgradeable} from "@openzeppelin-contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-import {BlueberryErrors as Errors} from "../helpers/BlueberryErrors.sol";
+import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
+import {MintableToken} from "@blueberry-v2/utils/MintableToken.sol";
 import {INonAtomicMinter} from "./interfaces/INonAtomicMinter.sol";
 
 /**
@@ -86,6 +87,28 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
                             Admin Functions
     //////////////////////////////////////////////////////////////*/
 
+    /// @inheritdoc INonAtomicMinter
+    function mint(address user, uint256 processedAmount, uint256 mintedAmount) external override onlyOwner {
+        DepositStorage storage $ = _getDepositStorage();
+        _mint($, user, processedAmount, mintedAmount);
+    }
+
+    /// @inheritdoc INonAtomicMinter
+    function batchMint(address[] calldata users, uint256[] calldata processedAmounts, uint256[] calldata mintedAmounts)
+        external
+        override
+        onlyOwner
+    {
+        uint256 len = users.length;
+        require(len == processedAmounts.length, Errors.ARRAY_LENGTH_MISMATCH());
+        require(len == mintedAmounts.length, Errors.ARRAY_LENGTH_MISMATCH());
+
+        DepositStorage storage $ = _getDepositStorage();
+        for (uint256 i = 0; i < len; ++i) {
+            _mint($, users[i], processedAmounts[i], mintedAmounts[i]);
+        }
+    }
+
     // TODO: Make a specific roll for this
     function processDeposit(address user, uint256 amount) external onlyOwner {
         DepositStorage storage $ = _getDepositStorage();
@@ -93,10 +116,6 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
         // Transfer the underlying tokens to caller
         IERC20(UNDERLYING).safeTransfer(msg.sender, amount);
     }
-
-    function mint(address user, uint256 amount) external override onlyOwner {}
-
-    function batchMint(address[] calldata users, uint256[] calldata amounts) external override onlyOwner {}
 
     // TODO: Make a specific roll for this
     function batchProcessDeposit(address[] calldata users, uint256[] calldata amounts)
@@ -124,6 +143,20 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
     /*//////////////////////////////////////////////////////////////
                             Internal Functions
     //////////////////////////////////////////////////////////////*/
+
+    /// @notice Internal logic for minting receipt tokens to a user
+    function _mint(DepositStorage storage $, address user, uint256 processedAmount, uint256 mintedAmount) internal {
+        _validateAmount(processedAmount);
+        _validateAmount(mintedAmount);
+
+        // Decrease the user's deposit in flight accounting
+        _decreaseInFlight($, user, processedAmount);
+
+        emit Mint(user, processedAmount, mintedAmount);
+
+        // Mint the receipt tokens to the user
+        MintableToken(TOKEN).mint(user, mintedAmount);
+    }
 
     /**
      * @notice Internal logic for processing a user's deposit request
@@ -185,6 +218,7 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
      */
     function _decreaseInFlight(DepositStorage storage $, address user, uint256 amount) internal {
         require(amount <= $.inFlight[user].amount, Errors.AMOUNT_EXCEEDS_BALANCE());
+
         $.inFlight[user].amount -= amount;
         $.inFlight[user].lastUpdated = block.timestamp;
         $.totalInFlight -= amount;
