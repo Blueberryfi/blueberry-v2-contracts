@@ -12,7 +12,7 @@ import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20P
  */
 contract MintableToken is ERC20, ERC20Burnable, AccessControl, ERC20Permit {
     /*//////////////////////////////////////////////////////////////
-                                Constants
+                            Constants & Immutables
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The MINTER_ROLE will be able to freely mint tokens as they see fit
@@ -21,11 +21,18 @@ contract MintableToken is ERC20, ERC20Burnable, AccessControl, ERC20Permit {
     /// @notice The BURNER_ROLE will be able to burn tokens from any address
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
+    /// @notice The number of decimals the token uses
+    uint8 private immutable _decimals;
+
     /*//////////////////////////////////////////////////////////////
                                 Constructor
     //////////////////////////////////////////////////////////////*/
 
-    constructor(string memory name, string memory symbol, address admin) ERC20(name, symbol) ERC20Permit(name) {
+    constructor(string memory name, string memory symbol, uint8 decimals_, address admin)
+        ERC20(name, symbol)
+        ERC20Permit(name)
+    {
+        _decimals = decimals_;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
@@ -60,5 +67,10 @@ contract MintableToken is ERC20, ERC20Burnable, AccessControl, ERC20Permit {
      */
     function burn(uint256 amount) public override onlyRole(BURNER_ROLE) {
         super.burn(amount);
+    }
+
+    /// @inheritdoc ERC20
+    function decimals() public view override returns (uint8) {
+        return _decimals;
     }
 }

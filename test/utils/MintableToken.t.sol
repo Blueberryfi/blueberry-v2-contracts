@@ -14,7 +14,11 @@ contract MintableTokenTest is Test {
     address public immutable USER = makeAddr("USER");
 
     function setUp() public {
-        mintableToken = new MintableToken("Test Token", "TEST", ADMIN);
+        mintableToken = new MintableToken("Test Token", "TEST", 8, ADMIN);
+    }
+
+    function test_decimals() public view {
+        assertEq(mintableToken.decimals(), 8);
     }
 
     function test_grant_roles() public {

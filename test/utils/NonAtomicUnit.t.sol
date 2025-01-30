@@ -31,7 +31,7 @@ contract NonAtomicUnit is Test {
 
     function setUp() public {
         underlying = new MockERC20("Underlying", "UND", 6);
-        receipt = new MintableToken("Receipt", "REC", ADMIN);
+        receipt = new MintableToken("Receipt", "REC", 18, ADMIN);
 
         address implementation = address(new NonAtomicMinter(address(underlying), address(receipt)));
         nonAtomicMinter = NonAtomicMinter(

@@ -36,7 +36,7 @@ contract NonAtomicFuzz is Faucet {
         vm.selectFork(mainnetFork);
 
         underlying = ERC20(MainnetFaucet.USDC);
-        receipt = new MintableToken("Receipt", "REC", ADMIN);
+        receipt = new MintableToken("Receipt", "REC", 18, ADMIN);
 
         address implementation = address(new NonAtomicMinter(address(underlying), address(receipt)));
         nonAtomicMinter = NonAtomicMinter(
