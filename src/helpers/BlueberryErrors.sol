@@ -22,4 +22,10 @@ library BlueberryErrors {
 
     /// @notice Error thrown when the sender is not the vault
     error INVALID_SENDER();
+
+    /// @notice Error thrown when the array lengths do not match
+    error ARRAY_LENGTH_MISMATCH();
+
+    /// @notice Error thrown when the amount exceeds the current balance
+    error AMOUNT_EXCEEDS_BALANCE();
 }

@@ -29,6 +29,9 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
     /// @custom:storage-location erc7201:deposit.storage
     struct DepositStorage {
         mapping(address => DepositRequest) deposits;
+        mapping(address => DepositInFlight) inFlight;
+        uint256 totalDeposits;
+        uint256 totalInFlight;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -76,22 +79,44 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
         emit Deposit(msg.sender, amount);
 
         // Transfer the underlying tokens to the contract
-        _transferUnderlying(msg.sender, address(this), amount);
+        IERC20(UNDERLYING).safeTransferFrom(msg.sender, address(this), amount);
     }
 
     /*//////////////////////////////////////////////////////////////
                             Admin Functions
     //////////////////////////////////////////////////////////////*/
 
-    function sweep(address user, uint256 amount) external onlyOwner {
-        emit Sweep(user, amount);
+    // TODO: Make a specific roll for this
+    function processDeposit(address user, uint256 amount) external onlyOwner {
+        DepositStorage storage $ = _getDepositStorage();
+        _processDeposit($, user, amount);
+        // Transfer the underlying tokens to caller
+        IERC20(UNDERLYING).safeTransfer(msg.sender, amount);
     }
 
     function mint(address user, uint256 amount) external override onlyOwner {}
 
     function batchMint(address[] calldata users, uint256[] calldata amounts) external override onlyOwner {}
 
-    function batchSweep(address[] calldata users, uint256[] calldata amounts) external override onlyOwner {}
+    // TODO: Make a specific roll for this
+    function batchProcessDeposit(address[] calldata users, uint256[] calldata amounts)
+        external
+        override
+        onlyOwner
+        returns (uint256 amountProcessed)
+    {
+        uint256 len = users.length;
+        require(len == amounts.length, Errors.ARRAY_LENGTH_MISMATCH());
+
+        DepositStorage storage $ = _getDepositStorage();
+
+        for (uint256 i = 0; i < len; ++i) {
+            _processDeposit($, users[i], amounts[i]);
+            amountProcessed += amounts[i];
+        }
+        // Transfer the underlying tokens to caller
+        IERC20(UNDERLYING).safeTransfer(msg.sender, amountProcessed);
+    }
 
     /// @inheritdoc UUPSUpgradeable
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
@@ -100,9 +125,19 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
                             Internal Functions
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Transfers underlying tokens from one address to another
-    function _transferUnderlying(address from, address to, uint256 amount) internal {
-        IERC20(UNDERLYING).safeTransferFrom(from, to, amount);
+    /**
+     * @notice Internal logic for processing a user's deposit request
+     * @param user The address of the user depositing
+     * @param amount The amount of underlying tokens to decrease the request by
+     */
+    function _processDeposit(DepositStorage storage $, address user, uint256 amount) internal {
+        _validateAmount(amount);
+
+        // Decrease the user's deposit request
+        _decreaseRequest($, user, amount);
+        _increaseInFlight($, user, amount);
+
+        emit InFlight(user, amount);
     }
 
     /**
@@ -114,12 +149,45 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
     function _increaseRequest(DepositStorage storage $, address user, uint256 amount) internal {
         $.deposits[user].amount += amount;
         $.deposits[user].lastUpdated = block.timestamp;
+        $.totalDeposits += amount;
     }
 
+    /**
+     * @notice Increases the user's deposit in flight accounting
+     * @param $ The deposit storage
+     * @param user The address of the user depositing
+     * @param amount The amount of underlying tokens to increase the in flight by
+     */
+    function _increaseInFlight(DepositStorage storage $, address user, uint256 amount) internal {
+        $.inFlight[user].amount += amount;
+        $.inFlight[user].lastUpdated = block.timestamp;
+        $.totalInFlight += amount;
+    }
+
+    /**
+     * @notice Decreases the user's deposit request
+     * @param $ The deposit storage
+     * @param user The address of the user depositing
+     * @param amount The amount of underlying tokens to decrease the request by
+     */
     function _decreaseRequest(DepositStorage storage $, address user, uint256 amount) internal {
-        require(amount <= $.deposits[user].amount, "NonAtomicMinter: Amount exceeds current request");
+        require(amount <= $.deposits[user].amount, Errors.AMOUNT_EXCEEDS_BALANCE());
         $.deposits[user].amount -= amount;
         $.deposits[user].lastUpdated = block.timestamp;
+        $.totalDeposits -= amount;
+    }
+
+    /**
+     * @notice Decreases the user's deposit in flight accounting
+     * @param $ The deposit storage
+     * @param user The address of the user depositing
+     * @param amount The amount of underlying tokens to decrease the in flight by
+     */
+    function _decreaseInFlight(DepositStorage storage $, address user, uint256 amount) internal {
+        require(amount <= $.inFlight[user].amount, Errors.AMOUNT_EXCEEDS_BALANCE());
+        $.inFlight[user].amount -= amount;
+        $.inFlight[user].lastUpdated = block.timestamp;
+        $.totalInFlight -= amount;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -130,6 +198,21 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
     function currentRequest(address user) public view override returns (DepositRequest memory) {
         DepositStorage storage $ = _getDepositStorage();
         return $.deposits[user];
+    }
+
+    /// @inheritdoc INonAtomicMinter
+    function currentInFlight(address user) public view override returns (DepositInFlight memory) {
+        return _getDepositStorage().inFlight[user];
+    }
+
+    /// @inheritdoc INonAtomicMinter
+    function totalDeposits() public view override returns (uint256) {
+        return _getDepositStorage().totalDeposits;
+    }
+
+    /// @inheritdoc INonAtomicMinter
+    function totalInFlight() public view override returns (uint256) {
+        return _getDepositStorage().totalInFlight;
     }
 
     /*//////////////////////////////////////////////////////////////

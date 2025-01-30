@@ -61,6 +61,9 @@ contract NonAtomicFuzz is Faucet {
         INonAtomicMinter.DepositRequest memory request = nonAtomicMinter.currentRequest(ALICE);
         assertEq(request.amount, amount);
         assertEq(request.lastUpdated, block.timestamp);
+
+        // Validate total deposits
+        assertEq(nonAtomicMinter.totalDeposits(), amount);
     }
 
     function test_secondDeposit(uint256 deposit1, uint256 deposit2, uint256 timeBetweenDeposits) public {
@@ -92,8 +95,47 @@ contract NonAtomicFuzz is Faucet {
         uint256 depositDifference = secondRequest.amount - firstRequest.amount;
         assertEq(depositDifference, deposit2);
 
+        // Validate total deposits
+        assertEq(nonAtomicMinter.totalDeposits(), totalAmount);
+
         // Validate Token balances
         assertEq(underlying.balanceOf(ALICE), 0);
         assertEq(underlying.balanceOf(address(nonAtomicMinter)), totalAmount);
+    }
+
+    function test_process_deposit(uint256 initialAmount, uint256 amountToProcess) public {
+        initialAmount = bound(initialAmount, 1e6, 1_000_000e6);
+        amountToProcess = bound(amountToProcess, 1e6, 1_000_000e6);
+        vm.assume(initialAmount >= amountToProcess);
+
+        _dripToken("USDC", ALICE, initialAmount);
+
+        vm.startPrank(ALICE);
+        underlying.approve(address(nonAtomicMinter), initialAmount);
+        nonAtomicMinter.deposit(initialAmount);
+        vm.stopPrank();
+
+        vm.startPrank(OWNER);
+        nonAtomicMinter.processDeposit(ALICE, amountToProcess);
+        vm.stopPrank();
+
+        uint256 remainingAmount = initialAmount - amountToProcess;
+        assertEq(underlying.balanceOf(ALICE), 0);
+        assertEq(receipt.balanceOf(ALICE), 0);
+        assertEq(underlying.balanceOf(address(nonAtomicMinter)), remainingAmount);
+        assertEq(underlying.balanceOf(OWNER), amountToProcess);
+
+        // Validate deposit storage
+        INonAtomicMinter.DepositRequest memory request = nonAtomicMinter.currentRequest(ALICE);
+        assertEq(request.amount, remainingAmount);
+        assertEq(request.lastUpdated, block.timestamp);
+
+        INonAtomicMinter.DepositInFlight memory inFlight = nonAtomicMinter.currentInFlight(ALICE);
+        assertEq(inFlight.amount, amountToProcess);
+        assertEq(inFlight.lastUpdated, block.timestamp);
+
+        // Validate total deposits
+        assertEq(nonAtomicMinter.totalDeposits(), remainingAmount);
+        assertEq(nonAtomicMinter.totalInFlight(), amountToProcess);
     }
 }

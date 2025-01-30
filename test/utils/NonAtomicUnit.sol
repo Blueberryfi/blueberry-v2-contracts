@@ -31,13 +31,32 @@ contract NonAtomicUnit is Test {
         );
     }
 
-    function test_constructor() public view {
+    function test_initial_state() public view {
         assertEq(nonAtomicMinter.UNDERLYING(), address(underlying));
         assertEq(nonAtomicMinter.TOKEN(), address(receipt));
+        assertEq(nonAtomicMinter.owner(), OWNER);
     }
 
-    function test_initialize() public view {
-        assertEq(nonAtomicMinter.owner(), OWNER);
+    function test_upgrade() public {
+        address newImplementation = address(new NonAtomicMinter(address(underlying), address(receipt)));
+
+        // Reverts if non-owner calls upgradeToAndCall
+        vm.prank(ALICE);
+        vm.expectRevert();
+        nonAtomicMinter.upgradeToAndCall(newImplementation, "");
+
+        // Valid upgrade
+        vm.prank(OWNER);
+        nonAtomicMinter.upgradeToAndCall(newImplementation, "");
+
+        bytes32 implementationBytes = vm.load(address(nonAtomicMinter), ERC1967Utils.IMPLEMENTATION_SLOT);
+        address implementation = address(uint160(uint256(implementationBytes)));
+        assertEq(implementation, newImplementation);
+    }
+
+    function test_initialized() public {
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        nonAtomicMinter.initialize(ALICE);
     }
 
     function test_deposit() public {
@@ -69,29 +88,56 @@ contract NonAtomicUnit is Test {
         INonAtomicMinter.DepositRequest memory request = nonAtomicMinter.currentRequest(ALICE);
         assertEq(request.amount, 100e6);
         assertEq(request.lastUpdated, block.timestamp);
+
+        // Validate total deposits
+        assertEq(nonAtomicMinter.totalDeposits(), 100e6);
     }
 
-    function test_revert_upgradeFromNonOwner() public {
-        address newImplementation = address(new NonAtomicMinter(address(underlying), address(receipt)));
+    function test_process_deposit() public {
+        underlying.mint(ALICE, 100e6);
 
-        vm.prank(ALICE);
-        vm.expectRevert();
-        nonAtomicMinter.upgradeToAndCall(newImplementation, "");
+        vm.startPrank(ALICE);
+        underlying.approve(address(nonAtomicMinter), 100e6);
+        nonAtomicMinter.deposit(100e6);
+        vm.stopPrank();
+
+        vm.startPrank(OWNER);
+        vm.expectEmit(true, true, true, true);
+        emit INonAtomicMinter.InFlight(ALICE, 100e6);
+        nonAtomicMinter.processDeposit(ALICE, 100e6);
+        vm.stopPrank();
+
+        // Validate Token balances
+        assertEq(underlying.balanceOf(ALICE), 0);
+        assertEq(underlying.balanceOf(address(nonAtomicMinter)), 0);
+        assertEq(underlying.balanceOf(OWNER), 100e6);
+        assertEq(receipt.balanceOf(ALICE), 0); // receipt tokens should still not be minted yet
+
+        // Validate deposit storage
+        INonAtomicMinter.DepositRequest memory request = nonAtomicMinter.currentRequest(ALICE);
+        assertEq(request.amount, 0);
+        assertEq(request.lastUpdated, block.timestamp);
+
+        // Validate in flight accounting
+        INonAtomicMinter.DepositInFlight memory inFlight = nonAtomicMinter.currentInFlight(ALICE);
+        assertEq(inFlight.amount, 100e6);
+        assertEq(inFlight.lastUpdated, block.timestamp);
+
+        // Validate total deposits
+        assertEq(nonAtomicMinter.totalDeposits(), 0);
+        assertEq(nonAtomicMinter.totalInFlight(), 100e6);
     }
 
-    function test_upgradeFromOwner() public {
-        address newImplementation = address(new NonAtomicMinter(address(underlying), address(receipt)));
+    function test_invalid_process_deposit() public {
+        underlying.mint(ALICE, 100e6);
 
-        vm.prank(OWNER);
-        nonAtomicMinter.upgradeToAndCall(newImplementation, "");
+        vm.startPrank(ALICE);
+        underlying.approve(address(nonAtomicMinter), 100e6);
+        nonAtomicMinter.deposit(100e6);
+        vm.stopPrank();
 
-        bytes32 implementationBytes = vm.load(address(nonAtomicMinter), ERC1967Utils.IMPLEMENTATION_SLOT);
-        address implementation = address(uint160(uint256(implementationBytes)));
-        assertEq(implementation, newImplementation);
-    }
-
-    function test_Initialized() public {
-        vm.expectRevert(Initializable.InvalidInitialization.selector);
-        nonAtomicMinter.initialize(ALICE);
+        vm.startPrank(OWNER);
+        vm.expectRevert(Errors.AMOUNT_EXCEEDS_BALANCE.selector);
+        nonAtomicMinter.processDeposit(ALICE, 101e6);
     }
 }
