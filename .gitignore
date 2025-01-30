@@ -18,6 +18,3 @@ coverage/
 
 # IDEA
 .idea/
-
-# Ignore dependencies
-dependencies/*
