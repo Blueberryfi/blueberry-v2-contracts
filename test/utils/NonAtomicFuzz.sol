@@ -23,7 +23,10 @@ contract NonAtomicFuzz is Faucet {
     ERC20 public underlying;
     MintableToken public receipt;
 
-    address internal immutable OWNER = makeAddr("OWNER");
+    address internal immutable ADMIN = makeAddr("ADMIN");
+    address internal immutable PROCESSOR = makeAddr("PROCESSOR");
+    address internal immutable MINTER = makeAddr("MINTER");
+
     address internal immutable ALICE = makeAddr("ALICE");
     address internal immutable BOB = makeAddr("BOB");
     address internal immutable RANDO = makeAddr("RANDO");
@@ -33,15 +36,17 @@ contract NonAtomicFuzz is Faucet {
         vm.selectFork(mainnetFork);
 
         underlying = ERC20(MainnetFaucet.USDC);
-        receipt = new MintableToken("Receipt", "REC", OWNER);
+        receipt = new MintableToken("Receipt", "REC", ADMIN);
 
         address implementation = address(new NonAtomicMinter(address(underlying), address(receipt)));
         nonAtomicMinter = NonAtomicMinter(
-            address(new ERC1967Proxy(implementation, abi.encodeCall(NonAtomicMinter.initialize, (OWNER))))
+            address(new ERC1967Proxy(implementation, abi.encodeCall(NonAtomicMinter.initialize, (ADMIN))))
         );
 
-        vm.startPrank(OWNER);
+        vm.startPrank(ADMIN);
         receipt.grantRole(receipt.MINTER_ROLE(), address(nonAtomicMinter));
+        nonAtomicMinter.grantRole(nonAtomicMinter.MINTER_ROLE(), MINTER);
+        nonAtomicMinter.grantRole(nonAtomicMinter.PROCESSOR_ROLE(), PROCESSOR);
         vm.stopPrank();
     }
 
@@ -121,7 +126,7 @@ contract NonAtomicFuzz is Faucet {
         nonAtomicMinter.deposit(initialAmount);
         vm.stopPrank();
 
-        vm.startPrank(OWNER);
+        vm.startPrank(PROCESSOR);
         nonAtomicMinter.processDeposit(ALICE, amountToProcess);
         vm.stopPrank();
 
@@ -129,7 +134,7 @@ contract NonAtomicFuzz is Faucet {
         assertEq(underlying.balanceOf(ALICE), 0);
         assertEq(receipt.balanceOf(ALICE), 0);
         assertEq(underlying.balanceOf(address(nonAtomicMinter)), remainingAmount);
-        assertEq(underlying.balanceOf(OWNER), amountToProcess);
+        assertEq(underlying.balanceOf(PROCESSOR), amountToProcess);
 
         // Validate deposit storage
         INonAtomicMinter.DepositRequest memory request = nonAtomicMinter.currentRequest(ALICE);
@@ -166,9 +171,11 @@ contract NonAtomicFuzz is Faucet {
         nonAtomicMinter.deposit(depositAmount);
         vm.stopPrank();
 
-        vm.startPrank(OWNER);
+        vm.startPrank(PROCESSOR);
         nonAtomicMinter.processDeposit(ALICE, processedAmount);
+        vm.stopPrank();
 
+        vm.startPrank(MINTER);
         vm.expectEmit(true, true, true, true);
         emit INonAtomicMinter.Mint(ALICE, processedUsed, mintedAmount);
         nonAtomicMinter.mint(ALICE, processedUsed, mintedAmount);
@@ -178,7 +185,7 @@ contract NonAtomicFuzz is Faucet {
 
         assertEq(underlying.balanceOf(ALICE), 0);
         assertEq(underlying.balanceOf(address(nonAtomicMinter)), endTotalDeposits);
-        assertEq(underlying.balanceOf(OWNER), processedAmount);
+        assertEq(underlying.balanceOf(PROCESSOR), processedAmount);
         assertEq(receipt.balanceOf(ALICE), mintedAmount);
 
         // Validate deposit storage
@@ -233,10 +240,11 @@ contract NonAtomicFuzz is Faucet {
         nonAtomicMinter.deposit(deposit3);
         vm.stopPrank();
 
-        vm.startPrank(OWNER);
+        vm.startPrank(PROCESSOR);
         nonAtomicMinter.processDeposit(ALICE, deposit1);
         nonAtomicMinter.processDeposit(BOB, deposit2);
         nonAtomicMinter.processDeposit(RANDO, deposit3);
+        vm.stopPrank();
 
         address[] memory users = new address[](3);
         users[0] = ALICE;
@@ -254,12 +262,13 @@ contract NonAtomicFuzz is Faucet {
         mintedAmounts[1] = mint2;
         mintedAmounts[2] = mint3;
 
+        vm.startPrank(MINTER);
         nonAtomicMinter.batchMint(users, processedAmounts, mintedAmounts);
 
         assertEq(underlying.balanceOf(ALICE), 0);
         assertEq(underlying.balanceOf(BOB), 0);
         assertEq(underlying.balanceOf(RANDO), 0);
-        assertEq(underlying.balanceOf(OWNER), deposit1 + deposit2 + deposit3);
+        assertEq(underlying.balanceOf(PROCESSOR), deposit1 + deposit2 + deposit3);
 
         assertEq(receipt.balanceOf(ALICE), mint1);
         assertEq(receipt.balanceOf(BOB), mint2);

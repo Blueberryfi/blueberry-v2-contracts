@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
-import {OwnableUpgradeable} from "@openzeppelin-contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
@@ -14,13 +14,18 @@ import {INonAtomicMinter} from "./interfaces/INonAtomicMinter.sol";
 /**
  * @title NonAtomicMinter
  * @notice Minter contract for strategies that rely on a non-atomic mint/burn mechanism.
+ * @dev Implements role-based access control.
+ *      - DEFAULT_ADMIN_ROLE: Can grant and revoke all roles
+ *      - UPGRADE_ROLE: Can upgrade the contract implementation
+ *      - PROCESSOR_ROLE: Can process users deposit requests
+ *      - MINTER_ROLE: Can mint receipt tokens to users
  * @dev This contract works by users depositing underlying tokens, signalling the desire to mint receipt tokens.
  *      Once the backend infrastructure processes the deposit, the user will be minted their receipt tokens.
  *      This will be a multi-stage release:
  *      - [Stage 1] Users can deposit underlying tokens and mint receipt tokens.
- *          - No withdrawal functionality or deposit cancellation.
+ *          - No withdrawal functionality or deposit cancellations.
  */
-contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, OwnableUpgradeable {
+contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
@@ -45,6 +50,15 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
     /// @inheritdoc INonAtomicMinter
     address public immutable TOKEN;
 
+    /// @notice The role for the account that is able to upgrade the contract
+    bytes32 public constant UPGRADE_ROLE = keccak256("UPGRADE_ROLE");
+
+    /// @notice The role for the account that is able to process user deposits
+    bytes32 public constant PROCESSOR_ROLE = keccak256("PROCESSOR_ROLE");
+
+    /// @notice The role for the account that is able to mint receipt tokens to users
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+
     /// @notice The location for the deposit storage
     bytes32 public constant DEPOSIT_STORAGE_LOCATION =
         keccak256(abi.encode(uint256(keccak256(bytes("deposit.storage"))) - 1)) & ~bytes32(uint256(0xff));
@@ -60,9 +74,12 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
         _disableInitializers();
     }
 
-    function initialize(address owner) public initializer {
-        __Ownable_init(owner);
+    function initialize(address admin) public initializer {
+        __AccessControl_init();
         __UUPSUpgradeable_init();
+
+        // Grant the admin the DEFAULT_ADMIN_ROLE
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -88,7 +105,11 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc INonAtomicMinter
-    function mint(address user, uint256 processedAmount, uint256 mintedAmount) external override onlyOwner {
+    function mint(address user, uint256 processedAmount, uint256 mintedAmount)
+        external
+        override
+        onlyRole(MINTER_ROLE)
+    {
         DepositStorage storage $ = _getDepositStorage();
         _mint($, user, processedAmount, mintedAmount);
     }
@@ -97,7 +118,7 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
     function batchMint(address[] calldata users, uint256[] calldata processedAmounts, uint256[] calldata mintedAmounts)
         external
         override
-        onlyOwner
+        onlyRole(MINTER_ROLE)
     {
         uint256 len = users.length;
         require(len == processedAmounts.length, Errors.ARRAY_LENGTH_MISMATCH());
@@ -110,7 +131,7 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
     }
 
     // TODO: Make a specific roll for this
-    function processDeposit(address user, uint256 amount) external onlyOwner {
+    function processDeposit(address user, uint256 amount) external onlyRole(PROCESSOR_ROLE) {
         DepositStorage storage $ = _getDepositStorage();
         _processDeposit($, user, amount);
         // Transfer the underlying tokens to caller
@@ -121,7 +142,7 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
     function batchProcessDeposit(address[] calldata users, uint256[] calldata amounts)
         external
         override
-        onlyOwner
+        onlyRole(PROCESSOR_ROLE)
         returns (uint256 amountProcessed)
     {
         uint256 len = users.length;
@@ -138,7 +159,7 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ow
     }
 
     /// @inheritdoc UUPSUpgradeable
-    function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyRole(UPGRADE_ROLE) {}
 
     /*//////////////////////////////////////////////////////////////
                             Internal Functions
