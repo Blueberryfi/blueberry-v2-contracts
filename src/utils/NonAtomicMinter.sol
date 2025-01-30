@@ -130,7 +130,7 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ac
         }
     }
 
-    // TODO: Make a specific roll for this
+    /// @inheritdoc INonAtomicMinter
     function processDeposit(address user, uint256 amount) external onlyRole(PROCESSOR_ROLE) {
         DepositStorage storage $ = _getDepositStorage();
         _processDeposit($, user, amount);
@@ -138,7 +138,7 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ac
         IERC20(UNDERLYING).safeTransfer(msg.sender, amount);
     }
 
-    // TODO: Make a specific roll for this
+    /// @inheritdoc INonAtomicMinter
     function batchProcessDeposit(address[] calldata users, uint256[] calldata amounts)
         external
         override
