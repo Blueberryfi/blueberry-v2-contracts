@@ -57,6 +57,11 @@ contract MintableTokenTest is Test {
         vm.expectRevert();
         mintableToken.burnFrom(USER, burnAmount);
 
+        // Approves BURNER to burn USER's tokens
+        vm.startPrank(USER);
+        mintableToken.approve(BURNER, burnAmount);
+        vm.stopPrank();
+
         // Burns token
         vm.startPrank(BURNER);
         mintableToken.burnFrom(USER, burnAmount);

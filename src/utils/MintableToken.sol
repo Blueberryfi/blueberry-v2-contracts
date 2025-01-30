@@ -57,7 +57,7 @@ contract MintableToken is ERC20, ERC20Burnable, AccessControl, ERC20Permit {
      * @param amount Amount of tokens to burn
      */
     function burnFrom(address from, uint256 amount) public override onlyRole(BURNER_ROLE) {
-        _burn(from, amount);
+        super.burnFrom(from, amount);
     }
 
     /**
