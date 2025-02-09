@@ -8,3 +8,10 @@ libs = ["lib", "dependencies"]
 "@openzeppelin-contracts-upgradeable" = "5.2.0"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[rpc_endpoints]
+arbitrum_sepolia = "${ARB_SEPOLIA_RPC_URL}"
+
+[etherscan]
+arbitrum_sepolia = { key = "${ARBISCAN_API_KEY}", url = "https://api-sepolia.arbiscan.io/api" }
+

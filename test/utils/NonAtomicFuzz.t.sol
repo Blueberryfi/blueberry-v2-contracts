@@ -31,6 +31,8 @@ contract NonAtomicFuzz is Faucet {
     address internal immutable BOB = makeAddr("BOB");
     address internal immutable RANDO = makeAddr("RANDO");
 
+    uint256 internal immutable MIN_DEPOSIT = 5e6;
+
     function setUp() public {
         mainnetFork = vm.createFork(vm.envString("MAINNET_RPC_URL"));
         vm.selectFork(mainnetFork);
@@ -40,7 +42,7 @@ contract NonAtomicFuzz is Faucet {
 
         address implementation = address(new NonAtomicMinter(address(underlying), address(receipt)));
         nonAtomicMinter = NonAtomicMinter(
-            address(new ERC1967Proxy(implementation, abi.encodeCall(NonAtomicMinter.initialize, (ADMIN))))
+            address(new ERC1967Proxy(implementation, abi.encodeCall(NonAtomicMinter.initialize, (ADMIN, MIN_DEPOSIT))))
         );
 
         vm.startPrank(ADMIN);
@@ -51,7 +53,7 @@ contract NonAtomicFuzz is Faucet {
     }
 
     function test_deposit(uint256 amount) public {
-        amount = bound(amount, 1e6, 1_000_000e6);
+        amount = bound(amount, 10e6, 1_000_000e6);
         _dripToken("USDC", ALICE, amount);
 
         vm.startPrank(ALICE);
@@ -59,7 +61,7 @@ contract NonAtomicFuzz is Faucet {
 
         // Valid deposit
         vm.expectEmit(true, true, true, true);
-        emit INonAtomicMinter.Deposit(ALICE, amount);
+        emit INonAtomicMinter.OrderPending(0, ALICE, amount);
         nonAtomicMinter.deposit(amount);
         vm.stopPrank();
 
@@ -69,17 +71,21 @@ contract NonAtomicFuzz is Faucet {
         assertEq(receipt.balanceOf(ALICE), 0); // receipt tokens should not be minted yet
 
         // Validate deposit storage
-        INonAtomicMinter.DepositRequest memory request = nonAtomicMinter.currentRequest(ALICE);
-        assertEq(request.amount, amount);
-        assertEq(request.lastUpdated, block.timestamp);
+        INonAtomicMinter.OrderInfo memory order = nonAtomicMinter.info(0);
+        assertEq(order.amount, amount);
+        assertEq(order.lastUpdated, block.timestamp);
 
         // Validate total deposits
-        assertEq(nonAtomicMinter.totalDeposits(), amount);
+        assertEq(nonAtomicMinter.nextId(), 1);
+
+        // Validate order ownership
+        assertEq(nonAtomicMinter.isUserOrder(ALICE, 0), true);
+        assertEq(nonAtomicMinter.isUserOrder(BOB, 0), false);
     }
 
     function test_secondDeposit(uint256 deposit1, uint256 deposit2, uint256 timeBetweenDeposits) public {
-        deposit1 = bound(deposit1, 1e6, 1_000_000e6);
-        deposit2 = bound(deposit2, 1e6, 1_000_000e6);
+        deposit1 = bound(deposit1, 10e6, 1_000_000e6);
+        deposit2 = bound(deposit2, 10e6, 1_000_000e6);
         timeBetweenDeposits = bound(timeBetweenDeposits, 1, 360 days);
 
         // Mint underlying tokens to Alice
@@ -91,78 +97,80 @@ contract NonAtomicFuzz is Faucet {
 
         // First deposit
         nonAtomicMinter.deposit(deposit1);
-        INonAtomicMinter.DepositRequest memory firstRequest = nonAtomicMinter.currentRequest(ALICE);
+        INonAtomicMinter.OrderInfo memory firstOrder = nonAtomicMinter.info(0);
 
         // Skip in time by timeBetweenDeposits
-        vm.warp(firstRequest.lastUpdated + timeBetweenDeposits);
+        vm.warp(firstOrder.lastUpdated + timeBetweenDeposits);
 
         // Second deposit
         nonAtomicMinter.deposit(deposit2);
 
-        INonAtomicMinter.DepositRequest memory secondRequest = nonAtomicMinter.currentRequest(ALICE);
-        assertEq(secondRequest.amount, totalAmount);
-        assertEq(secondRequest.lastUpdated, block.timestamp);
+        // Validate second deposit storage
+        INonAtomicMinter.OrderInfo memory secondOrder = nonAtomicMinter.info(1);
+        assertEq(secondOrder.amount, deposit2);
+        assertEq(secondOrder.lastUpdated, block.timestamp);
 
-        uint256 depositDifference = secondRequest.amount - firstRequest.amount;
-        assertEq(depositDifference, deposit2);
+        // Validate that the first order still has not changed
+        assertEq(firstOrder.amount, deposit1);
+        assertEq(firstOrder.lastUpdated, block.timestamp - timeBetweenDeposits);
 
         // Validate total deposits
-        assertEq(nonAtomicMinter.totalDeposits(), totalAmount);
+        assertEq(nonAtomicMinter.nextId(), 2);
 
         // Validate Token balances
         assertEq(underlying.balanceOf(ALICE), 0);
         assertEq(underlying.balanceOf(address(nonAtomicMinter)), totalAmount);
+
+        // Validate order ownership
+        assertEq(nonAtomicMinter.isUserOrder(ALICE, 0), true);
+        assertEq(nonAtomicMinter.isUserOrder(BOB, 0), false);
+        assertEq(nonAtomicMinter.isUserOrder(ALICE, 1), true);
+        assertEq(nonAtomicMinter.isUserOrder(BOB, 1), false);
     }
 
-    function test_process_deposit(uint256 initialAmount, uint256 amountToProcess) public {
-        initialAmount = bound(initialAmount, 1e6, 1_000_000e6);
-        amountToProcess = bound(amountToProcess, 1e6, 1_000_000e6);
-        vm.assume(initialAmount >= amountToProcess);
+    function test_sweepOrder(uint256 amount) public {
+        amount = bound(amount, 10e6, 1_000_000e6);
 
-        _dripToken("USDC", ALICE, initialAmount);
+        _dripToken("USDC", ALICE, amount);
 
         vm.startPrank(ALICE);
-        underlying.approve(address(nonAtomicMinter), initialAmount);
-        nonAtomicMinter.deposit(initialAmount);
+        underlying.approve(address(nonAtomicMinter), amount);
+        nonAtomicMinter.deposit(amount);
         vm.stopPrank();
 
-        vm.startPrank(PROCESSOR);
-        nonAtomicMinter.processDeposit(ALICE, amountToProcess);
-        vm.stopPrank();
-
-        uint256 remainingAmount = initialAmount - amountToProcess;
         assertEq(underlying.balanceOf(ALICE), 0);
         assertEq(receipt.balanceOf(ALICE), 0);
-        assertEq(underlying.balanceOf(address(nonAtomicMinter)), remainingAmount);
-        assertEq(underlying.balanceOf(PROCESSOR), amountToProcess);
+        assertEq(underlying.balanceOf(address(nonAtomicMinter)), amount);
+        assertEq(underlying.balanceOf(PROCESSOR), 0);
+
+        vm.startPrank(PROCESSOR);
+        vm.expectEmit(true, true, true, true);
+        emit INonAtomicMinter.OrderSwept(0, amount);
+        nonAtomicMinter.sweepOrder(0);
+        vm.stopPrank();
+
+        assertEq(underlying.balanceOf(ALICE), 0);
+        assertEq(receipt.balanceOf(ALICE), 0);
+        assertEq(underlying.balanceOf(address(nonAtomicMinter)), 0);
+        assertEq(underlying.balanceOf(PROCESSOR), amount);
 
         // Validate deposit storage
-        INonAtomicMinter.DepositRequest memory request = nonAtomicMinter.currentRequest(ALICE);
-        assertEq(request.amount, remainingAmount);
-        assertEq(request.lastUpdated, block.timestamp);
-
-        INonAtomicMinter.DepositInFlight memory inFlight = nonAtomicMinter.currentInFlight(ALICE);
-        assertEq(inFlight.amount, amountToProcess);
-        assertEq(inFlight.lastUpdated, block.timestamp);
+        INonAtomicMinter.OrderInfo memory order = nonAtomicMinter.info(0);
+        assertEq(order.amount, amount);
+        assertEq(order.lastUpdated, block.timestamp);
+        assertTrue(order.status == INonAtomicMinter.OrderStatus.IN_FLIGHT);
 
         // Validate total deposits
-        assertEq(nonAtomicMinter.totalDeposits(), remainingAmount);
-        assertEq(nonAtomicMinter.totalInFlight(), amountToProcess);
+        assertEq(nonAtomicMinter.nextId(), 1);
+
+        // Validate order ownership
+        assertEq(nonAtomicMinter.isUserOrder(ALICE, 0), true);
+        assertEq(nonAtomicMinter.isUserOrder(BOB, 0), false);
     }
 
-    function test_mint(uint256 depositAmount, uint256 processedAmount, uint256 processedUsed, uint256 mintedAmount)
-        public
-    {
+    function test_mint(uint256 depositAmount, uint256 mintedAmount) public {
         depositAmount = bound(depositAmount, 10e6, 1_000_000e6);
-        processedAmount = bound(processedAmount, 10e6, 1_000_000e6);
         mintedAmount = bound(mintedAmount, 10e6, 1_000_000e6);
-        processedUsed = bound(processedUsed, 1e6, processedAmount);
-
-        vm.assume(depositAmount >= processedAmount);
-        vm.assume(processedAmount >= mintedAmount);
-
-        uint256 endTotalDeposits = depositAmount - processedAmount;
-        uint256 endTotalInFlight = processedAmount - processedUsed;
 
         _dripToken("USDC", ALICE, depositAmount);
 
@@ -172,126 +180,24 @@ contract NonAtomicFuzz is Faucet {
         vm.stopPrank();
 
         vm.startPrank(PROCESSOR);
-        nonAtomicMinter.processDeposit(ALICE, processedAmount);
+        nonAtomicMinter.sweepOrder(0);
         vm.stopPrank();
 
         vm.startPrank(MINTER);
         vm.expectEmit(true, true, true, true);
-        emit INonAtomicMinter.Mint(ALICE, processedUsed, mintedAmount);
-        nonAtomicMinter.mint(ALICE, processedUsed, mintedAmount);
+        emit INonAtomicMinter.OrderCompleted(0, ALICE, mintedAmount);
+        nonAtomicMinter.mint(0, ALICE, mintedAmount);
 
-        assertEq(nonAtomicMinter.totalDeposits(), endTotalDeposits);
-        assertEq(nonAtomicMinter.totalInFlight(), endTotalInFlight);
+        assertEq(nonAtomicMinter.nextId(), 1);
 
         assertEq(underlying.balanceOf(ALICE), 0);
-        assertEq(underlying.balanceOf(address(nonAtomicMinter)), endTotalDeposits);
-        assertEq(underlying.balanceOf(PROCESSOR), processedAmount);
+        assertEq(underlying.balanceOf(address(nonAtomicMinter)), 0);
         assertEq(receipt.balanceOf(ALICE), mintedAmount);
 
         // Validate deposit storage
-        INonAtomicMinter.DepositRequest memory request = nonAtomicMinter.currentRequest(ALICE);
-        assertEq(request.amount, endTotalDeposits);
-        assertEq(request.lastUpdated, block.timestamp);
-
-        INonAtomicMinter.DepositInFlight memory inFlight = nonAtomicMinter.currentInFlight(ALICE);
-        assertEq(inFlight.amount, endTotalInFlight);
-        assertEq(inFlight.lastUpdated, block.timestamp);
-
-        // Validate total deposits
-        assertEq(nonAtomicMinter.totalDeposits(), endTotalDeposits);
-        assertEq(nonAtomicMinter.totalInFlight(), endTotalInFlight);
-    }
-
-    function test_batchMint(
-        uint256 deposit1,
-        uint256 mint1,
-        uint256 deposit2,
-        uint256 mint2,
-        uint256 deposit3,
-        uint256 mint3
-    ) public {
-        deposit1 = bound(deposit1, 10e6, 1_000_000e6);
-        mint1 = bound(mint1, 10e6, 1_000_000e6);
-        vm.assume(deposit1 >= mint1);
-
-        deposit2 = bound(deposit2, 10e6, 1_000_000e6);
-        mint2 = bound(mint2, 10e6, 1_000_000e6);
-        vm.assume(deposit2 >= mint2);
-
-        deposit3 = bound(deposit3, 10e6, 1_000_000e6);
-        mint3 = bound(mint3, 10e6, 1_000_000e6);
-        vm.assume(deposit3 >= mint3);
-
-        _dripToken("USDC", ALICE, deposit1);
-        _dripToken("USDC", BOB, deposit2);
-        _dripToken("USDC", RANDO, deposit3);
-
-        vm.startPrank(ALICE);
-        underlying.approve(address(nonAtomicMinter), deposit1);
-        nonAtomicMinter.deposit(deposit1);
-
-        vm.startPrank(BOB);
-        underlying.approve(address(nonAtomicMinter), deposit2);
-        nonAtomicMinter.deposit(deposit2);
-        vm.stopPrank();
-
-        vm.startPrank(RANDO);
-        underlying.approve(address(nonAtomicMinter), deposit3);
-        nonAtomicMinter.deposit(deposit3);
-        vm.stopPrank();
-
-        vm.startPrank(PROCESSOR);
-        nonAtomicMinter.processDeposit(ALICE, deposit1);
-        nonAtomicMinter.processDeposit(BOB, deposit2);
-        nonAtomicMinter.processDeposit(RANDO, deposit3);
-        vm.stopPrank();
-
-        address[] memory users = new address[](3);
-        users[0] = ALICE;
-        users[1] = BOB;
-        users[2] = RANDO;
-
-        // We will mint receipt tokens 1:1 for underlying tokens.
-        uint256[] memory processedAmounts = new uint256[](3);
-        processedAmounts[0] = mint1;
-        processedAmounts[1] = mint2;
-        processedAmounts[2] = mint3;
-
-        uint256[] memory mintedAmounts = new uint256[](3);
-        mintedAmounts[0] = mint1;
-        mintedAmounts[1] = mint2;
-        mintedAmounts[2] = mint3;
-
-        vm.startPrank(MINTER);
-        nonAtomicMinter.batchMint(users, processedAmounts, mintedAmounts);
-
-        assertEq(underlying.balanceOf(ALICE), 0);
-        assertEq(underlying.balanceOf(BOB), 0);
-        assertEq(underlying.balanceOf(RANDO), 0);
-        assertEq(underlying.balanceOf(PROCESSOR), deposit1 + deposit2 + deposit3);
-
-        assertEq(receipt.balanceOf(ALICE), mint1);
-        assertEq(receipt.balanceOf(BOB), mint2);
-        assertEq(receipt.balanceOf(RANDO), mint3);
-
-        // Validate in flight accounting
-        INonAtomicMinter.DepositInFlight memory inFlight = nonAtomicMinter.currentInFlight(ALICE);
-        uint256 inFlightAmount1 = deposit1 - mint1;
-        assertEq(inFlight.amount, inFlightAmount1);
-        assertEq(inFlight.lastUpdated, block.timestamp);
-
-        INonAtomicMinter.DepositInFlight memory inFlight2 = nonAtomicMinter.currentInFlight(BOB);
-        uint256 inFlightAmount2 = deposit2 - mint2;
-        assertEq(inFlight2.amount, inFlightAmount2);
-        assertEq(inFlight2.lastUpdated, block.timestamp);
-
-        INonAtomicMinter.DepositInFlight memory inFlight3 = nonAtomicMinter.currentInFlight(RANDO);
-        uint256 inFlightAmount3 = deposit3 - mint3;
-        assertEq(inFlight3.amount, inFlightAmount3);
-        assertEq(inFlight3.lastUpdated, block.timestamp);
-
-        // Validate total deposits
-        assertEq(nonAtomicMinter.totalDeposits(), 0);
-        assertEq(nonAtomicMinter.totalInFlight(), inFlightAmount1 + inFlightAmount2 + inFlightAmount3);
+        INonAtomicMinter.OrderInfo memory order = nonAtomicMinter.info(0);
+        assertEq(order.amount, depositAmount);
+        assertEq(order.lastUpdated, block.timestamp);
+        assertTrue(order.status == INonAtomicMinter.OrderStatus.COMPLETED);
     }
 }

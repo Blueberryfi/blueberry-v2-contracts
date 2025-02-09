@@ -20,6 +20,9 @@ library BlueberryErrors {
     /// @notice Error thrown when the collateral is not supported
     error COLLATERAL_NOT_SUPPORTED();
 
+    /// @notice Error thrown when the deposited collateral is below the minimum deposit
+    error BELOW_MIN_COLL();
+
     /// @notice Error thrown when the sender is not the vault
     error INVALID_SENDER();
 
@@ -28,4 +31,10 @@ library BlueberryErrors {
 
     /// @notice Error thrown when the amount exceeds the current balance
     error AMOUNT_EXCEEDS_BALANCE();
+
+    /// @notice Error if a user tries to execute an invalid operation
+    error INVALID_OPERATION();
+
+    /// @notice Error if an operation is attempted on the wrong user
+    error INVALID_USER();
 }

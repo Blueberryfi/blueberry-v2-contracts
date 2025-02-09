@@ -17,7 +17,7 @@ import {INonAtomicMinter} from "./interfaces/INonAtomicMinter.sol";
  * @dev Implements role-based access control.
  *      - DEFAULT_ADMIN_ROLE: Can grant and revoke all roles
  *      - UPGRADE_ROLE: Can upgrade the contract implementation
- *      - PROCESSOR_ROLE: Can process users deposit requests
+ *      - PROCESSOR_ROLE: Can process users order requests
  *      - MINTER_ROLE: Can mint receipt tokens to users
  * @dev This contract works by users depositing underlying tokens, signalling the desire to mint receipt tokens.
  *      Once the backend infrastructure processes the deposit, the user will be minted their receipt tokens.
@@ -32,12 +32,12 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ac
                             State Variables
     //////////////////////////////////////////////////////////////*/
 
-    /// @custom:storage-location erc7201:deposit.storage
-    struct DepositStorage {
-        mapping(address => DepositRequest) deposits;
-        mapping(address => DepositInFlight) inFlight;
-        uint256 totalDeposits;
-        uint256 totalInFlight;
+    /// @custom:storage-location erc7201:order.storage
+    struct OrderStorage {
+        mapping(uint256 => OrderInfo) orders; // id -> order info
+        mapping(address => mapping(uint256 => bool)) ownsOrder; // user -> id -> true/false
+        uint256 minDeposit; // minimum deposit amount
+        uint256 orderCount; // number of orders
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -59,9 +59,9 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ac
     /// @notice The role for the account that is able to mint receipt tokens to users
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
-    /// @notice The location for the deposit storage
-    bytes32 public constant DEPOSIT_STORAGE_LOCATION =
-        keccak256(abi.encode(uint256(keccak256(bytes("deposit.storage"))) - 1)) & ~bytes32(uint256(0xff));
+    /// @notice The location for the order storage
+    bytes32 public constant ORDER_STORAGE_LOCATION =
+        keccak256(abi.encode(uint256(keccak256(bytes("order.storage"))) - 1)) & ~bytes32(uint256(0xff));
 
     /*//////////////////////////////////////////////////////////////
                         Constructor / Initializer
@@ -69,12 +69,20 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ac
 
     // @custom:oz-upgrades-unsafe-allow constructor
     constructor(address underlying, address token) {
+        require(underlying != address(0), Errors.ADDRESS_ZERO());
+        require(token != address(0), Errors.ADDRESS_ZERO());
+
         UNDERLYING = underlying;
         TOKEN = token;
         _disableInitializers();
     }
 
-    function initialize(address admin) public initializer {
+    function initialize(address admin, uint256 minDeposit_) public initializer {
+        require(admin != address(0), Errors.ADDRESS_ZERO());
+        require(minDeposit_ > 0, Errors.AMOUNT_ZERO());
+
+        _getOrderStorage().minDeposit = minDeposit_;
+
         __AccessControl_init();
         __UUPSUpgradeable_init();
 
@@ -90,11 +98,11 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ac
     function deposit(uint256 amount) external {
         _validateAmount(amount);
 
-        // Increase the user's deposit request
-        DepositStorage storage $ = _getDepositStorage();
-        _increaseRequest($, msg.sender, amount);
+        // Open a new order for the user
+        OrderStorage storage $ = _getOrderStorage();
+        uint256 id = _deposit($, msg.sender, amount);
 
-        emit Deposit(msg.sender, amount);
+        emit OrderPending(id, msg.sender, amount);
 
         // Transfer the underlying tokens to the contract
         IERC20(UNDERLYING).safeTransferFrom(msg.sender, address(this), amount);
@@ -105,57 +113,27 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ac
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc INonAtomicMinter
-    function mint(address user, uint256 processedAmount, uint256 mintedAmount)
-        external
-        override
-        onlyRole(MINTER_ROLE)
-    {
-        DepositStorage storage $ = _getDepositStorage();
-        _mint($, user, processedAmount, mintedAmount);
-    }
+    function sweepOrder(uint256 id) external onlyRole(PROCESSOR_ROLE) {
+        OrderStorage storage $ = _getOrderStorage();
+        uint256 amount = _sweepOrder($, id);
 
-    /// @inheritdoc INonAtomicMinter
-    function batchMint(address[] calldata users, uint256[] calldata processedAmounts, uint256[] calldata mintedAmounts)
-        external
-        override
-        onlyRole(MINTER_ROLE)
-    {
-        uint256 len = users.length;
-        require(len == processedAmounts.length, Errors.ARRAY_LENGTH_MISMATCH());
-        require(len == mintedAmounts.length, Errors.ARRAY_LENGTH_MISMATCH());
+        emit OrderSwept(id, amount);
 
-        DepositStorage storage $ = _getDepositStorage();
-        for (uint256 i = 0; i < len; ++i) {
-            _mint($, users[i], processedAmounts[i], mintedAmounts[i]);
-        }
-    }
-
-    /// @inheritdoc INonAtomicMinter
-    function processDeposit(address user, uint256 amount) external onlyRole(PROCESSOR_ROLE) {
-        DepositStorage storage $ = _getDepositStorage();
-        _processDeposit($, user, amount);
         // Transfer the underlying tokens to caller
         IERC20(UNDERLYING).safeTransfer(msg.sender, amount);
     }
 
     /// @inheritdoc INonAtomicMinter
-    function batchProcessDeposit(address[] calldata users, uint256[] calldata amounts)
-        external
-        override
-        onlyRole(PROCESSOR_ROLE)
-        returns (uint256 amountProcessed)
-    {
-        uint256 len = users.length;
-        require(len == amounts.length, Errors.ARRAY_LENGTH_MISMATCH());
+    function mint(uint256 id, address user, uint256 receiptAmount) external override onlyRole(MINTER_ROLE) {
+        _validateAmount(receiptAmount);
 
-        DepositStorage storage $ = _getDepositStorage();
+        OrderStorage storage $ = _getOrderStorage();
+        _completeOrder($, id, user);
 
-        for (uint256 i = 0; i < len; ++i) {
-            _processDeposit($, users[i], amounts[i]);
-            amountProcessed += amounts[i];
-        }
-        // Transfer the underlying tokens to caller
-        IERC20(UNDERLYING).safeTransfer(msg.sender, amountProcessed);
+        emit OrderCompleted(id, user, receiptAmount);
+
+        // Mint the receipt tokens to the user
+        MintableToken(TOKEN).mint(user, receiptAmount);
     }
 
     /// @inheritdoc UUPSUpgradeable
@@ -165,84 +143,49 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ac
                             Internal Functions
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Internal logic for minting receipt tokens to a user
-    function _mint(DepositStorage storage $, address user, uint256 processedAmount, uint256 mintedAmount) internal {
-        _validateAmount(processedAmount);
-        _validateAmount(mintedAmount);
-
-        // Decrease the user's deposit in flight accounting
-        _decreaseInFlight($, user, processedAmount);
-
-        emit Mint(user, processedAmount, mintedAmount);
-
-        // Mint the receipt tokens to the user
-        MintableToken(TOKEN).mint(user, mintedAmount);
-    }
-
-    /**
-     * @notice Internal logic for processing a user's deposit request
-     * @param user The address of the user depositing
-     * @param amount The amount of underlying tokens to decrease the request by
-     */
-    function _processDeposit(DepositStorage storage $, address user, uint256 amount) internal {
-        _validateAmount(amount);
-
-        // Decrease the user's deposit request
-        _decreaseRequest($, user, amount);
-        _increaseInFlight($, user, amount);
-
-        emit InFlight(user, amount);
-    }
-
     /**
      * @notice Increases the user's deposit request
-     * @param $ The deposit storage
+     * @param $ The order storage
      * @param user The address of the user depositing
      * @param amount The amount of underlying tokens to increase the request by
+     * @return id The id of the order
      */
-    function _increaseRequest(DepositStorage storage $, address user, uint256 amount) internal {
-        $.deposits[user].amount += amount;
-        $.deposits[user].lastUpdated = block.timestamp;
-        $.totalDeposits += amount;
+    function _deposit(OrderStorage storage $, address user, uint256 amount) internal returns (uint256 id) {
+        require(amount >= $.minDeposit, Errors.BELOW_MIN_COLL());
+
+        $.orders[$.orderCount].amount += amount;
+        $.orders[$.orderCount].lastUpdated = block.timestamp;
+        $.orders[$.orderCount].status = OrderStatus.PENDING;
+
+        $.ownsOrder[user][$.orderCount] = true;
+        id = $.orderCount++;
     }
 
     /**
-     * @notice Increases the user's deposit in flight accounting
-     * @param $ The deposit storage
-     * @param user The address of the user depositing
-     * @param amount The amount of underlying tokens to increase the in flight by
+     * @notice Sweeps a user's order
+     * @param $ The order storage
+     * @param id The id of the order to sweep
      */
-    function _increaseInFlight(DepositStorage storage $, address user, uint256 amount) internal {
-        $.inFlight[user].amount += amount;
-        $.inFlight[user].lastUpdated = block.timestamp;
-        $.totalInFlight += amount;
+    function _sweepOrder(OrderStorage storage $, uint256 id) internal returns (uint256 amount) {
+        require($.orders[id].status == OrderStatus.PENDING, Errors.INVALID_OPERATION());
+
+        $.orders[id].status = OrderStatus.IN_FLIGHT;
+        $.orders[id].lastUpdated = block.timestamp;
+        amount = $.orders[id].amount;
     }
 
     /**
-     * @notice Decreases the user's deposit request
-     * @param $ The deposit storage
-     * @param user The address of the user depositing
-     * @param amount The amount of underlying tokens to decrease the request by
+     * @notice Completes a user's order by updating the order status to COMPLETED
+     * @param $ The order storage
+     * @param id The id of the order to complete
+     * @param user The address of the user whos TOKENs are being minted
      */
-    function _decreaseRequest(DepositStorage storage $, address user, uint256 amount) internal {
-        require(amount <= $.deposits[user].amount, Errors.AMOUNT_EXCEEDS_BALANCE());
-        $.deposits[user].amount -= amount;
-        $.deposits[user].lastUpdated = block.timestamp;
-        $.totalDeposits -= amount;
-    }
+    function _completeOrder(OrderStorage storage $, uint256 id, address user) internal {
+        require($.orders[id].status == OrderStatus.IN_FLIGHT, Errors.INVALID_OPERATION());
+        require($.ownsOrder[user][id], Errors.INVALID_USER());
 
-    /**
-     * @notice Decreases the user's deposit in flight accounting
-     * @param $ The deposit storage
-     * @param user The address of the user depositing
-     * @param amount The amount of underlying tokens to decrease the in flight by
-     */
-    function _decreaseInFlight(DepositStorage storage $, address user, uint256 amount) internal {
-        require(amount <= $.inFlight[user].amount, Errors.AMOUNT_EXCEEDS_BALANCE());
-
-        $.inFlight[user].amount -= amount;
-        $.inFlight[user].lastUpdated = block.timestamp;
-        $.totalInFlight -= amount;
+        $.orders[id].status = OrderStatus.COMPLETED;
+        $.orders[id].lastUpdated = block.timestamp;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -250,33 +193,32 @@ contract NonAtomicMinter is INonAtomicMinter, Initializable, UUPSUpgradeable, Ac
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc INonAtomicMinter
-    function currentRequest(address user) public view override returns (DepositRequest memory) {
-        DepositStorage storage $ = _getDepositStorage();
-        return $.deposits[user];
+    function info(uint256 id) public view returns (OrderInfo memory) {
+        return _getOrderStorage().orders[id];
     }
 
     /// @inheritdoc INonAtomicMinter
-    function currentInFlight(address user) public view override returns (DepositInFlight memory) {
-        return _getDepositStorage().inFlight[user];
+    function nextId() public view returns (uint256) {
+        return _getOrderStorage().orderCount;
     }
 
     /// @inheritdoc INonAtomicMinter
-    function totalDeposits() public view override returns (uint256) {
-        return _getDepositStorage().totalDeposits;
+    function minDeposit() public view returns (uint256) {
+        return _getOrderStorage().minDeposit;
     }
 
     /// @inheritdoc INonAtomicMinter
-    function totalInFlight() public view override returns (uint256) {
-        return _getDepositStorage().totalInFlight;
+    function isUserOrder(address user, uint256 id) external view override returns (bool) {
+        return _getOrderStorage().ownsOrder[user][id];
     }
 
     /*//////////////////////////////////////////////////////////////
                             Pure Functions
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Retrieves the deposit storage
-    function _getDepositStorage() private pure returns (DepositStorage storage $) {
-        bytes32 slot = DEPOSIT_STORAGE_LOCATION;
+    /// @notice Retrieves the order storage
+    function _getOrderStorage() private pure returns (OrderStorage storage $) {
+        bytes32 slot = ORDER_STORAGE_LOCATION;
         assembly {
             $.slot := slot
         }

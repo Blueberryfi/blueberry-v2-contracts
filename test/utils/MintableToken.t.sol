@@ -35,9 +35,14 @@ contract MintableTokenTest is Test {
         vm.expectRevert();
         mintableToken.mint(ADMIN, amount);
 
-        // Mints token
         vm.startPrank(MINTER);
         mintableToken.mint(USER, amount);
+
+        // Cant mint to 0 address
+        vm.expectRevert();
+        mintableToken.mint(address(0), amount);
+
+        // Mints token
         assertEq(mintableToken.balanceOf(USER), amount);
         assertEq(mintableToken.totalSupply(), amount);
         vm.stopPrank();

@@ -6,6 +6,8 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 
+import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
+
 /**
  * @title MintableToken
  * @notice An ERC20 token with minting and burning capabilities, protected by role-based access control
@@ -47,6 +49,7 @@ contract MintableToken is ERC20, ERC20Burnable, AccessControl, ERC20Permit {
      * @param amount Amount of tokens to mint
      */
     function mint(address to, uint256 amount) public onlyRole(MINTER_ROLE) {
+        require(to != address(0), Errors.ADDRESS_ZERO());
         _mint(to, amount);
     }
 

@@ -7,13 +7,13 @@ import {MintableToken} from "@blueberry-v2/utils/MintableToken.sol";
 
 contract DeployMintableTokenScript is Script {
     // PLEASE SET THESE VALUES BEFORE RUNNING THE SCRIPT
-    string public constant NAME = "";
-    string public constant SYMBOL = "";
-    uint8 public constant DECIMALS = 0;
+    string public constant NAME = "Blueberry wrapped HLP";
+    string public constant SYMBOL = "blHLP";
+    uint8 public constant DECIMALS = 6;
 
-    address public constant ADMIN = 0x0000000000000000000000000000000000000000;
-    address public constant MINTER = 0x0000000000000000000000000000000000000000;
-    address public constant BURNER = 0x0000000000000000000000000000000000000000;
+    address public constant ADMIN = 0x263c0a1ff85604f0ee3f4160cAa445d0bad28dF7;
+    address public constant MINTER = 0x263c0a1ff85604f0ee3f4160cAa445d0bad28dF7;
+    address public constant BURNER = 0x263c0a1ff85604f0ee3f4160cAa445d0bad28dF7;
 
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
