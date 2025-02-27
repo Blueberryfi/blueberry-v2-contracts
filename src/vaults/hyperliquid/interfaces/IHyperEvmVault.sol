@@ -8,6 +8,19 @@ pragma solidity 0.8.28;
  */
 interface IHyperEvmVault {
     /*//////////////////////////////////////////////////////////////
+                                Structs
+    //////////////////////////////////////////////////////////////*/
+    /**
+     * @notice A struct that contains the assets and shares that a user has requested to redeem
+     * @param assets The amount of assets that the user has requested to redeem
+     * @param shares The amount of shares that the user has requested to redeem
+     */
+    struct RedeemRequest {
+        uint64 assets;
+        uint256 shares;
+    }
+
+    /*//////////////////////////////////////////////////////////////
                                 Events
     //////////////////////////////////////////////////////////////*/
     /**
@@ -43,7 +56,6 @@ interface IHyperEvmVault {
      * @return feeTake_ The amount of fees to take in underlying assets
      */
     function previewFeeTake(uint256 preFeeTvl_) external view returns (uint256 feeTake_);
-
 
     /// @notice The L1 address of the vault being deposited into on Hyperliquid L1
     function l1Vault() external view returns (address);

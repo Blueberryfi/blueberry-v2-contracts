@@ -2,11 +2,11 @@
 pragma solidity 0.8.28;
 
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {FixedPointMathLib as FpMath} from "@solmate/utils/FixedPointMathLib.sol";
 import {ERC4626} from "@solmate/tokens/ERC4626.sol";
 import {ERC20} from "@solmate/tokens/ERC20.sol";
+import {SafeTransferLib} from "@solmate/utils/SafeTransferLib.sol";
+import {ReentrancyGuard} from "@solmate/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {BlueberryErrors as Errors} from "../../helpers/BlueberryErrors.sol";
 
@@ -20,18 +20,8 @@ import {IHyperEvmVault} from "./interfaces/IHyperEvmVault.sol";
  *         any vault on Hyperliquid L1.
  */
 contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard {
-    using SafeERC20 for ERC20;
+    using SafeTransferLib for ERC20;
     using FpMath for uint256;
-
-    /**
-     * @notice A struct that contains the assets and shares that a user has requested to redeem
-     * @param assets The amount of assets that the user has requested to redeem
-     * @param shares The amount of shares that the user has requested to redeem
-     */
-    struct RedeemRequest {
-        uint64 assets;
-        uint256 shares;
-    }
 
     /*//////////////////////////////////////////////////////////////
                                 Storage
@@ -95,6 +85,50 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
                             External Functions
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Overrides the ERC4626 deposit function to add custom fee logic + high water mark tracking
+    function deposit(uint256 assets, address receiver) public override nonReentrant returns (uint256 shares) {
+        uint256 supply = totalSupply;
+
+        if (supply == 0) {
+            shares = assets;
+            _highWaterMark = FpMath.WAD;
+        } else {
+            uint256 totalAssets_ = _totalEscrowValue();
+            uint256 feeTake = _takeFee(totalAssets_);
+            shares = assets.mulDivDown(supply, totalAssets_ - feeTake);
+        }
+
+        asset.safeTransferFrom(msg.sender, address(this), assets);
+        _mint(receiver, shares);
+
+        emit Deposit(msg.sender, receiver, assets, shares);
+
+        _updateBlockDeposits(assets);
+        _routeDeposit(assets);
+    }
+
+    /// @notice Overrides the ERC4626 mint function to add custom fee logic + high water mark tracking
+    function mint(uint256 shares, address receiver) public override nonReentrant returns (uint256 assets) {
+        uint256 supply = totalSupply;
+
+        if (supply == 0) {
+            assets = shares;
+            _highWaterMark = FpMath.WAD;
+        } else {
+            uint256 totalAssets_ = _totalEscrowValue();
+            uint256 feeTake = _takeFee(totalAssets_);
+            assets = shares.mulDivDown(totalAssets_ - feeTake, supply);
+        }
+
+        asset.safeTransferFrom(msg.sender, address(this), assets);
+        _mint(receiver, shares);
+
+        emit Deposit(msg.sender, receiver, assets, shares);
+
+        _updateBlockDeposits(assets);
+        _routeDeposit(assets);
+    }
+
     /// @inheritdoc IHyperEvmVault
     function requestRedeem(uint256 shares_) external nonReentrant {
         uint256 balance = this.balanceOf(msg.sender);
@@ -115,15 +149,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
     /// @inheritdoc IHyperEvmVault
     function tvl() public view returns (uint256 tvl_) {
-        uint256 escrowLength = escrows.length;
-        for (uint256 i = 0; i < escrowLength; ++i) {
-            VaultEscrow escrow = VaultEscrow(escrows[i]);
-            tvl_ += escrow.tvl();
-        }
-
-        if (lastL1Block == l1Block()) {
-            tvl_ += currentBlockDeposits;
-        }
+        tvl_ = _totalEscrowValue();
 
         uint256 pendingFees = previewFeeTake(tvl_) + _feesAccumulated;
 
@@ -137,24 +163,6 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     /// @inheritdoc IHyperEvmVault
     function previewFeeTake(uint256 preFeeTvl_) public view returns (uint256 feeTake_) {
         (feeTake_,,) = _calculateFee(preFeeTvl_);
-    }
-
-    /**
-     * @notice Takes the performance fee from the vault
-     * @dev There is a 10% performance fee on the vault's yield.
-     * @param preFeeTvl_ The total value of the vault before fees are taken
-     * @return The amount of fees to take in underlying assets
-     */
-    function feeTake(uint256 preFeeTvl_) public returns (uint256) {
-        (uint256 feeTake_, uint256 feePerShare, uint256 assetsPerShare) = _calculateFee(preFeeTvl_);
-
-        // Only update state if there's a fee to take
-        if (feeTake_ > 0) {
-            _highWaterMark = assetsPerShare - feePerShare;
-            _feesAccumulated += feeTake_;
-        }
-
-        return feeTake_;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -191,22 +199,6 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         _fetchAssets(assets_);
     }
 
-    /// @notice Overrides the ERC4626 afterDeposit function to update the current block deposits that are pending &
-    ///         call the escrow contract to deposit into the L1 vault
-    function afterDeposit(uint256 assets_, uint256 /*shares_*/ ) internal override {
-        if (lastL1Block != l1Block()) {
-            currentBlockDeposits = assets_;
-        } else {
-            currentBlockDeposits += assets_;
-        }
-
-        // Weird flow, likely need to override deposit and mint functions to optimize. Should also take fee in withdraws
-        feeTake(tvl());
-
-        VaultEscrow escrowToDeposit = VaultEscrow(escrows[depositEscrowIndex()]);
-        escrowToDeposit.deposit(uint64(assets_));
-    }
-
     /// @notice Overrides the ERC20 transfer function to enforce our transfer restrictions on pending redemptions
     function transfer(address to_, uint256 amount_) public override returns (bool) {
         _beforeTransfer(msg.sender, to_, amount_);
@@ -222,6 +214,25 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     /*//////////////////////////////////////////////////////////////
                             Internal Functions
     //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Internal helper function for calculating the total amount of assets locked by the vault
+     *         between all escrow contract + assets that still could be in flight from the previous L1 block
+     * @return assets_ The total amount of assets locked by the vault
+     */
+    function _totalEscrowValue() internal view returns (uint256 assets_) {
+        uint256 escrowLength = escrows.length;
+        for (uint256 i = 0; i < escrowLength; ++i) {
+            VaultEscrow escrow = VaultEscrow(escrows[i]);
+            assets_ += escrow.tvl();
+        }
+
+        if (lastL1Block == l1Block()) {
+            assets_ += currentBlockDeposits;
+        }
+
+        return assets_;
+    }
 
     /**
      * @notice Calculates the fee amount, fee per share, and assets per share
@@ -245,6 +256,47 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
             feePerShare_ = yield.mulDivUp(PERFORMANCE_FEE_BPS, BPS_DENOMINATOR);
             feeAmount_ = feePerShare_.mulWadUp(totalSupply_);
         }
+    }
+
+    /**
+     * @notice Takes the performance fee from the vault
+     * @dev There is a 10% performance fee on the vault's yield.
+     * @param preFeeTvl_ The total value of the vault before fees are taken
+     * @return The amount of fees to take in underlying assets
+     */
+    function _takeFee(uint256 preFeeTvl_) public returns (uint256) {
+        (uint256 feeTake_, uint256 feePerShare, uint256 assetsPerShare) = _calculateFee(preFeeTvl_);
+
+        // Only update state if there's a fee to take
+        if (feeTake_ > 0) {
+            _highWaterMark = assetsPerShare - feePerShare;
+            _feesAccumulated += feeTake_;
+        }
+
+        return feeTake_;
+    }
+
+    /**
+     * @notice Updates the amount of assets that have been sent to the L1 vault during the current L1 block
+     * @param assets_ The amount of assets to update the block deposits with
+     */
+    function _updateBlockDeposits(uint256 assets_) internal {
+        if (lastL1Block != l1Block()) {
+            currentBlockDeposits = assets_;
+        } else {
+            currentBlockDeposits += assets_;
+        }
+    }
+
+    /**
+     * @notice Routes the deposit to the correct escrow contract to be processed on L1
+     * @param assets_ The amount of assets to route to the escrow contract
+     */
+    function _routeDeposit(uint256 assets_) internal {
+        VaultEscrow escrowToDeposit = VaultEscrow(escrows[depositEscrowIndex()]);
+
+        asset.approve(address(escrowToDeposit), assets_);
+        escrowToDeposit.deposit(uint64(assets_));
     }
 
     /**

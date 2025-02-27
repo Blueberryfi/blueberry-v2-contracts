@@ -34,4 +34,8 @@ contract MockVaultEquityPrecompile {
     }
 }
 
-contract MockWritePrecompile {}
+contract MockWritePrecompile {
+    fallback(bytes calldata) external returns (bytes memory) {
+        // Do nothing
+    }
+}
