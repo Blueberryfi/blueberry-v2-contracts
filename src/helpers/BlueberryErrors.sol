@@ -22,4 +22,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when the sender is not the vault
     error INVALID_SENDER();
+
+    /// @notice Error thrown when the staticcall fails
+    error STATICCALL_FAILED();
 }

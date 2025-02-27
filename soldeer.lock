@@ -11,3 +11,10 @@ version = "5.2.0"
 url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts-upgradeable/5_2_0_11-01-2025_09:30:25_contracts-upgradeable.zip"
 checksum = "25d9cf22b6f4d8da7975f24234eefbf6c71348464ea74c8fdd481be3811767f5"
 integrity = "498747bedc3f757976da0b6125d26a63e79bb2b4dbabd8ecd2547e809a2fa27e"
+
+[[dependencies]]
+name = "solmate"
+version = "6.8.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/solmate/6_8_0_29-10-2024_19:01:45_solmate.zip"
+checksum = "e3ec0f0182cb3bbedecf8a0bcc39897266534a795ec732b2b03dafa285d78a5b"
+integrity = "a22e5a352de0231f671ee8adf5667bbe83c50012670083987bd1099a69feb429"
