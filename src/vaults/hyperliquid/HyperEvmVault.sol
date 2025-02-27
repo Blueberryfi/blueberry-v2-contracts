@@ -200,7 +200,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
             currentBlockDeposits += assets_;
         }
 
+        // Weird flow, likely need to override deposit and mint functions to optimize. Should also take fee in withdraws
         feeTake(tvl());
+
         VaultEscrow escrowToDeposit = VaultEscrow(escrows[depositEscrowIndex()]);
         escrowToDeposit.deposit(uint64(assets_));
     }
