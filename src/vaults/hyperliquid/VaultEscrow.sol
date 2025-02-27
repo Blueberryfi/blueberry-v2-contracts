@@ -107,9 +107,9 @@ contract VaultEscrow is IVaultEscrow {
         (bool success, bytes memory result) =
             VAULT_EQUITY_PRECOMPILE_ADDRESS.staticcall(abi.encode(address(this), _vault));
         require(success, "VaultEquity precompile call failed");
-        uint256 vaultEquity = abi.decode(result, (UserVaultEquity)).equity;
+        UserVaultEquity memory userVaultEquity = abi.decode(result, (UserVaultEquity));
         uint256 assetBalance = IERC20(_asset).balanceOf(address(this));
-        return vaultEquity + assetBalance;
+        return userVaultEquity.equity + assetBalance;
     }
 
     /// @inheritdoc IVaultEscrow

@@ -6,6 +6,7 @@ import {MockERC20, ERC20} from "../mocks/MockERC20.sol";
 import {HyperEvmVault} from "../../src/vaults/hyperliquid/HyperEvmVault.sol";
 import {VaultEscrow} from "../../src/vaults/hyperliquid/VaultEscrow.sol";
 import {BlueberryErrors} from "../../src/helpers/BlueberryErrors.sol";
+import {MockL1BlockNumberPrecompile} from "../mocks/MockHyperliquidPrecompiles.sol";
 
 contract VaultSetupUnitTest is Test {
     HyperEvmVault public vault;
@@ -15,6 +16,11 @@ contract VaultSetupUnitTest is Test {
 
     event EscrowDeployed(address indexed escrow);
 
+    MockL1BlockNumberPrecompile public l1BlockNumberPrecompile;
+    uint64 public initialL1BlockNumber = 1;
+
+    address public constant L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS = 0x0000000000000000000000000000000000000809;
+
     function setUp() public {
         vm.createSelectFork("https://rpc.hyperliquid-testnet.xyz/evm");
 
@@ -23,6 +29,10 @@ contract VaultSetupUnitTest is Test {
 
         // Deploy mock asset
         asset = new MockERC20("Test USDC", "USDC", 6);
+
+        l1BlockNumberPrecompile = new MockL1BlockNumberPrecompile();
+        vm.etch(L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS, address(l1BlockNumberPrecompile).code);
+        _updateL1BlockNumber(initialL1BlockNumber);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -131,5 +141,9 @@ contract VaultSetupUnitTest is Test {
         vm.warp(initialTimestamp + 7 days);
         assertEq(vault.depositEscrowIndex(), 0);
         assertEq(vault.redeemEscrowIndex(), 1);
+    }
+
+    function _updateL1BlockNumber(uint64 blockNumber_) internal {
+        vm.store(L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS, bytes32(uint256(0)), bytes32(uint256(blockNumber_)));
     }
 }

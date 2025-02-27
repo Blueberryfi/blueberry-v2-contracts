@@ -78,6 +78,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         require(l1Vault_ != address(0), Errors.ADDRESS_ZERO());
 
         _l1Vault = l1Vault_;
+        lastL1Block = l1Block();
         _deployEscrows(escrowCount_, l1Vault_, asset_, assetIndex_, assetPerpDecimals_);
     }
 

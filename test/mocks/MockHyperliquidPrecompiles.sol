@@ -11,10 +11,6 @@ contract MockL1BlockNumberPrecompile {
     fallback(bytes calldata) external returns (bytes memory) {
         return abi.encode(_block);
     }
-
-    function setL1BlockNumber(uint64 blockNumber_) external {
-        _block = blockNumber_;
-    }
 }
 
 contract MockVaultEquityPrecompile {
@@ -22,15 +18,11 @@ contract MockVaultEquityPrecompile {
         uint64 equity;
     }
 
-    mapping(address => mapping(address => UserVaultEquity)) private _userVaultEquity;
+    mapping(address => uint64) private _userVaultEquity;
 
     fallback(bytes calldata data) external returns (bytes memory) {
-        (address user, address vault) = abi.decode(data, (address, address));
-        return abi.encode(_userVaultEquity[user][vault]);
-    }
-
-    function setUserVaultEquity(address user_, address vault_, uint64 equity_) external {
-        _userVaultEquity[user_][vault_] = UserVaultEquity({equity: equity_});
+        (address user,) = abi.decode(data, (address, address));
+        return abi.encode(UserVaultEquity({equity: _userVaultEquity[user]}));
     }
 }
 
