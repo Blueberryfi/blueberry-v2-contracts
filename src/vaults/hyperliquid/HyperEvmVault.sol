@@ -33,8 +33,8 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     /// @notice The amount of deposits that have been made in the current L1 block
     uint256 public currentBlockDeposits;
 
-    /// @notice The high water mark for the vault
-    uint256 private _highWaterMark;
+    /// @notice The last time the fees were collected
+    uint256 private _lastFeeCollectionTimestamp;
 
     /// @notice The amount of fees that have been accumulated by the vault
     uint256 private _feesAccumulated;
@@ -55,11 +55,14 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     /// @notice The address of the L1 block number precompile, used for querying the L1 block number.
     address public constant L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS = 0x0000000000000000000000000000000000000809;
 
-    /// @notice The performance fee in basis points
-    uint256 public constant PERFORMANCE_FEE_BPS = 1000;
+    /// @notice The management fee in basis points
+    uint256 public constant MANAGEMENT_FEE_BPS = 150;
 
     /// @notice The denominator for the performance fee
     uint256 public constant BPS_DENOMINATOR = 10000;
+
+    /// @notice The number of seconds in a year
+    uint256 public constant ONE_YEAR = 360 days;
 
     /*//////////////////////////////////////////////////////////////
                                 Constructor
@@ -91,8 +94,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         uint256 supply = totalSupply;
 
         if (supply == 0) {
+            // If the vault is empty then we need to initialize last fee collection timestamp
             shares = assets;
-            _highWaterMark = FpMath.WAD;
+            _lastFeeCollectionTimestamp = block.timestamp;
         } else {
             uint256 totalAssets_ = _totalEscrowValue();
             uint256 feeTake = _takeFee(totalAssets_);
@@ -113,8 +117,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         uint256 supply = totalSupply;
 
         if (supply == 0) {
-            assets = shares;
-            _highWaterMark = FpMath.WAD;
+            // If the vault is empty then we need to initialize high water mark & last fee collection timestamp
+            shares = assets;
+            _lastFeeCollectionTimestamp = block.timestamp;
         } else {
             uint256 totalAssets_ = _totalEscrowValue();
             uint256 feeTake = _takeFee(totalAssets_);
@@ -163,7 +168,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
     /// @inheritdoc IHyperEvmVault
     function previewFeeTake(uint256 preFeeTvl_) public view returns (uint256 feeTake_) {
-        (feeTake_,,) = _calculateFee(preFeeTvl_);
+        feeTake_ = _calculateFee(preFeeTvl_);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -236,41 +241,37 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     }
 
     /**
-     * @notice Calculates the fee amount, fee per share, and assets per share
-     * @param preFeeTvl_ The total value of the vault before fees are taken
+     * @notice Calculates the management fee based on time elapsed since last collection
+     * @param totalAssets_ The total value of the vault
      * @return feeAmount_ The amount of fees to take
-     * @return feePerShare_ The fee per share
-     * @return assetsPerShare_ The assets per share
      */
-    function _calculateFee(uint256 preFeeTvl_)
-        internal
-        view
-        returns (uint256 feeAmount_, uint256 feePerShare_, uint256 assetsPerShare_)
-    {
-        uint256 totalSupply_ = totalSupply;
-        if (totalSupply_ == 0) return (0, 0, 0);
-
-        assetsPerShare_ = FpMath.WAD.mulDivDown(preFeeTvl_, totalSupply_);
-
-        if (assetsPerShare_ > _highWaterMark) {
-            uint256 yield = assetsPerShare_ - _highWaterMark;
-            feePerShare_ = yield.mulDivUp(PERFORMANCE_FEE_BPS, BPS_DENOMINATOR);
-            feeAmount_ = feePerShare_.mulWadUp(totalSupply_);
+    function _calculateFee(uint256 totalAssets_) internal view returns (uint256 feeAmount_) {
+        if (totalAssets_ == 0 || block.timestamp <= _lastFeeCollectionTimestamp) {
+            return 0;
         }
+
+        // Calculate time elapsed since last fee collection
+        uint256 timeElapsed = block.timestamp - _lastFeeCollectionTimestamp;
+
+        // Calculate the pro-rated management fee based on time elapsed
+        // (totalAssets * MANAGEMENT_FEE_BPS * timeElapsed) / (BPS_DENOMINATOR * SECONDS_PER_YEAR)
+        feeAmount_ = totalAssets_.mulDivDown(MANAGEMENT_FEE_BPS, BPS_DENOMINATOR).mulDivDown(timeElapsed, ONE_YEAR);
+
+        return feeAmount_;
     }
 
     /**
-     * @notice Takes the performance fee from the vault
-     * @dev There is a 10% performance fee on the vault's yield.
-     * @param preFeeTvl_ The total value of the vault before fees are taken
+     * @notice Takes the management fee from the vault
+     * @dev There is a 0.05% annual management fee on the vault's total assets.
+     * @param totalAssets_ The total value of the vault
      * @return The amount of fees to take in underlying assets
      */
-    function _takeFee(uint256 preFeeTvl_) public returns (uint256) {
-        (uint256 feeTake_, uint256 feePerShare, uint256 assetsPerShare) = _calculateFee(preFeeTvl_);
+    function _takeFee(uint256 totalAssets_) private returns (uint256) {
+        uint256 feeTake_ = _calculateFee(totalAssets_);
 
         // Only update state if there's a fee to take
         if (feeTake_ > 0) {
-            _highWaterMark = assetsPerShare - feePerShare;
+            _lastFeeCollectionTimestamp = block.timestamp;
             _feesAccumulated += feeTake_;
         }
 
@@ -282,7 +283,10 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
      * @param assets_ The amount of assets to update the block deposits with
      */
     function _updateBlockDeposits(uint256 assets_) internal {
-        if (lastL1Block != l1Block()) {
+        uint256 l1Block_ = l1Block();
+
+        if (lastL1Block != l1Block_) {
+            lastL1Block = l1Block_;
             currentBlockDeposits = assets_;
         } else {
             currentBlockDeposits += assets_;
@@ -402,5 +406,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
         uint256 depositIndex = depositEscrowIndex();
         return (depositIndex + 1) % len;
+    }
+
+    function feesAccumulated() public view returns (uint256) {
+        return _feesAccumulated;
     }
 }

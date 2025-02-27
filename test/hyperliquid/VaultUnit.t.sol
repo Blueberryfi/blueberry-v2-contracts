@@ -11,7 +11,6 @@ import {
     MockL1BlockNumberPrecompile,
     MockVaultEquityPrecompile
 } from "../mocks/MockHyperliquidPrecompiles.sol";
-import {console2} from "forge-std/console2.sol";
 
 contract VaultUnitTest is Test {
     HyperEvmVault public wrapper;
@@ -82,7 +81,7 @@ contract VaultUnitTest is Test {
         asset.approve(address(wrapper), amount);
         wrapper.deposit(amount, alice);
 
-        uint256 expectedShares = wrapper.previewMint(amount);
+        uint256 expectedShares = wrapper.previewDeposit(amount);
 
         vm.startPrank(bob);
         asset.approve(address(wrapper), amount);
@@ -123,25 +122,41 @@ contract VaultUnitTest is Test {
         uint256 amount = 100e6;
 
         asset.mint(alice, amount);
+        asset.mint(bob, amount);
 
         vm.startPrank(alice);
         asset.approve(address(wrapper), amount);
         wrapper.deposit(amount, alice);
 
-        vm.store(L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS, bytes32(uint256(0)), bytes32(uint256(2)));
-
         address escrow = wrapper.escrows(wrapper.depositEscrowIndex());
+        _updateL1BlockNumber(2);
         _updateVaultEquity(escrow, 101e6);
         vm.roll(2);
 
-        uint256 fee = 0.1e6;
-
-        assertEq(wrapper.totalAssets(), 101e6 - fee);
+        assertEq(wrapper.totalAssets(), 101e6);
         assertEq(wrapper.totalSupply(), 100e6);
         assertEq(wrapper.balanceOf(alice), 100e6);
 
-        assertEq(wrapper.convertToAssets(100e6), 101e6 - fee);
-        assertEq(wrapper.convertToShares(101e6 - fee), 100e6);
+        assertEq(wrapper.convertToAssets(100e6), 101e6);
+        assertEq(wrapper.convertToShares(101e6), 100e6);
+
+        // Skip 1/4 year
+        uint256 quarterYear = 90 days;
+        vm.warp(block.number + quarterYear);
+
+        uint256 fee = 101e6 * 150 * quarterYear / 10000 / 360 days;
+
+        // Second deposit | Bob
+        vm.startPrank(bob);
+        asset.approve(address(wrapper), amount);
+        uint256 expectedShares = wrapper.previewDeposit(amount);
+        wrapper.deposit(amount, bob);
+
+        assertEq(wrapper.totalAssets(), 201e6 - fee);
+        assertEq(wrapper.totalSupply(), amount + expectedShares);
+        assertEq(wrapper.balanceOf(bob), expectedShares);
+
+        assertApproxEqAbs(wrapper.convertToAssets(expectedShares), amount, 1);
     }
 
     function _updateL1BlockNumber(uint64 blockNumber_) internal {
