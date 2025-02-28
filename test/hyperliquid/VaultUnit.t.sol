@@ -159,6 +159,73 @@ contract VaultUnitTest is Test {
         assertApproxEqAbs(wrapper.convertToAssets(expectedShares), amount, 1);
     }
 
+    function test_redeem() public {
+        asset.mint(alice, 100e6);
+        asset.mint(bob, 100e6);
+
+        vm.startPrank(alice);
+        asset.approve(address(wrapper), 100e6);
+        wrapper.deposit(100e6, alice);
+
+        vm.startPrank(bob);
+        asset.approve(address(wrapper), 100e6);
+        wrapper.deposit(100e6, bob);
+
+        _updateL1BlockNumber(2);
+        address escrow = wrapper.escrows(wrapper.depositEscrowIndex());
+        // 50% yield 200e6 -> 300e6
+        _updateVaultEquity(escrow, 300e6);
+        vm.warp(block.timestamp + 360 days);
+
+        // 1.5% of 300e6 = 4.5e6
+        uint64 fee = 4.5e6;
+
+        assertEq(wrapper.previewFeeTake(300e6), fee);
+        assertEq(wrapper.totalAssets(), 295.5e6);
+        assertEq(wrapper.totalSupply(), 200e6);
+
+        vm.startPrank(alice);
+        wrapper.requestRedeem(100e6);
+        uint256 aliceAssetsToRedeem = wrapper.previewRedeem(100e6);
+
+        (uint64 aliceAssets, uint256 aliceShares) = wrapper.redeemRequests(alice);
+        assertEq(aliceShares, 100e6);
+        assertEq(aliceAssets, aliceAssetsToRedeem);
+        assertEq(aliceAssets, 147.75e6);
+
+        vm.startPrank(bob);
+        wrapper.requestRedeem(100e6);
+        uint256 bobAssetsToRedeem = wrapper.previewRedeem(100e6);
+
+        (uint64 bobAssets, uint256 bobShares) = wrapper.redeemRequests(bob);
+        assertEq(bobShares, 100e6);
+        assertEq(bobAssets, bobAssetsToRedeem);
+        assertEq(bobAssets, 147.75e6);
+
+        /// Update escrow and vault state to reflect precompile calls
+        vm.startPrank(HYPERLIQUID_SPOT_BRIDGE);
+        asset.mint(HYPERLIQUID_SPOT_BRIDGE, 95.5e6);
+        /// MINT REMAINDER OF TOKENS TO BRIDGE
+        asset.transfer(address(escrow), 295.5e6);
+
+        // Update escrow vault equity to just reflect the fee
+        _updateVaultEquity(escrow, fee);
+
+        vm.startPrank(alice);
+        wrapper.redeem(100e6, alice, alice);
+
+        vm.startPrank(bob);
+        wrapper.redeem(100e6, bob, bob);
+
+        assertEq(wrapper.balanceOf(alice), 0);
+        assertEq(wrapper.balanceOf(bob), 0);
+        assertEq(wrapper.totalAssets(), 0);
+        assertEq(wrapper.totalSupply(), 0);
+
+        assertEq(asset.balanceOf(alice), 147.75e6);
+        assertEq(asset.balanceOf(bob), 147.75e6);
+    }
+
     function _updateL1BlockNumber(uint64 blockNumber_) internal {
         vm.store(L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS, bytes32(uint256(0)), bytes32(uint256(blockNumber_)));
     }

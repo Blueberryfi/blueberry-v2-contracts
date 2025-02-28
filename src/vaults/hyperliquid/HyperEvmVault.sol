@@ -98,9 +98,11 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
             shares = assets;
             _lastFeeCollectionTimestamp = block.timestamp;
         } else {
-            uint256 totalAssets_ = _totalEscrowValue();
-            uint256 feeTake = _takeFee(totalAssets_);
-            shares = assets.mulDivDown(supply, totalAssets_ - feeTake);
+            uint256 grossAssets = _totalEscrowValue();
+            _takeFee(grossAssets);
+            uint256 accumulatedFees = _feesAccumulated;
+            uint256 netAssets = grossAssets > accumulatedFees ? grossAssets - accumulatedFees : 0;
+            shares = assets.mulDivDown(supply, netAssets);
         }
 
         asset.safeTransferFrom(msg.sender, address(this), assets);
@@ -121,9 +123,11 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
             shares = assets;
             _lastFeeCollectionTimestamp = block.timestamp;
         } else {
-            uint256 totalAssets_ = _totalEscrowValue();
-            uint256 feeTake = _takeFee(totalAssets_);
-            assets = shares.mulDivDown(totalAssets_ - feeTake, supply);
+            uint256 grossAssets = _totalEscrowValue();
+            _takeFee(grossAssets);
+            uint256 accumulatedFees = _feesAccumulated;
+            uint256 netAssets = grossAssets > accumulatedFees ? grossAssets - accumulatedFees : 0;
+            assets = shares.mulDivDown(netAssets, supply);
         }
 
         asset.safeTransferFrom(msg.sender, address(this), assets);
@@ -146,7 +150,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         require(request.shares <= balance, "Error"); // UPDATE ERROR CODE
 
         // User will redeem assets at the current share price
-        uint256 assetsToRedeem = convertToAssets(shares_);
+        uint256 grossAssets = _totalEscrowValue();
+        _takeFee(grossAssets);
+        uint256 accumulatedFees = _feesAccumulated;
+        uint256 netAssets = grossAssets > accumulatedFees ? grossAssets - accumulatedFees : 0;
+        uint256 assetsToRedeem = shares_.mulDivDown(netAssets, totalSupply);
+
         request.assets += uint64(assetsToRedeem);
 
         VaultEscrow escrowToRedeem = VaultEscrow(escrows[redeemEscrowIndex()]);
@@ -156,10 +165,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     /// @inheritdoc IHyperEvmVault
     function tvl() public view returns (uint256 tvl_) {
         tvl_ = _totalEscrowValue();
-
         uint256 pendingFees = previewFeeTake(tvl_) + _feesAccumulated;
 
-        if (pendingFees <= tvl_) {
+        if (pendingFees < tvl_) {
             tvl_ -= pendingFees;
         } else {
             tvl_ = 0;
@@ -242,11 +250,11 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
     /**
      * @notice Calculates the management fee based on time elapsed since last collection
-     * @param totalAssets_ The total value of the vault
+     * @param grossAssets The total value of the vault
      * @return feeAmount_ The amount of fees to take
      */
-    function _calculateFee(uint256 totalAssets_) internal view returns (uint256 feeAmount_) {
-        if (totalAssets_ == 0 || block.timestamp <= _lastFeeCollectionTimestamp) {
+    function _calculateFee(uint256 grossAssets) internal view returns (uint256 feeAmount_) {
+        if (grossAssets == 0 || block.timestamp <= _lastFeeCollectionTimestamp) {
             return 0;
         }
 
@@ -255,7 +263,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
         // Calculate the pro-rated management fee based on time elapsed
         // (totalAssets * MANAGEMENT_FEE_BPS * timeElapsed) / (BPS_DENOMINATOR * SECONDS_PER_YEAR)
-        feeAmount_ = totalAssets_.mulDivDown(MANAGEMENT_FEE_BPS, BPS_DENOMINATOR).mulDivDown(timeElapsed, ONE_YEAR);
+        feeAmount_ = grossAssets.mulDivDown(MANAGEMENT_FEE_BPS, BPS_DENOMINATOR).mulDivDown(timeElapsed, ONE_YEAR);
 
         return feeAmount_;
     }
@@ -263,11 +271,11 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     /**
      * @notice Takes the management fee from the vault
      * @dev There is a 0.05% annual management fee on the vault's total assets.
-     * @param totalAssets_ The total value of the vault
+     * @param grossAssets The total value of the vault
      * @return The amount of fees to take in underlying assets
      */
-    function _takeFee(uint256 totalAssets_) private returns (uint256) {
-        uint256 feeTake_ = _calculateFee(totalAssets_);
+    function _takeFee(uint256 grossAssets) private returns (uint256) {
+        uint256 feeTake_ = _calculateFee(grossAssets);
 
         // Only update state if there's a fee to take
         if (feeTake_ > 0) {
@@ -331,9 +339,14 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
      * @param from_ The address of the user to check
      * @param amount_ The amount of shares to check
      */
-    function _beforeTransfer(address from_, address, /*to_*/ uint256 amount_) internal view {
+    function _beforeTransfer(address from_, address, /*to_*/ uint256 amount_) internal {
         uint256 balance = this.balanceOf(from_);
         RedeemRequest memory request = redeemRequests[from_];
+
+        // Take a management fee on the total assets
+        uint256 grossAssets = _totalEscrowValue();
+        _takeFee(grossAssets);
+
         if (request.shares > 0) {
             require(balance - amount_ >= request.shares, "Error"); // UPDATE ERROR CODE
         }
