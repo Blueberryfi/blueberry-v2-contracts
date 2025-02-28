@@ -11,9 +11,9 @@ interface IHyperEvmVault {
                                 Structs
     //////////////////////////////////////////////////////////////*/
     /**
-     * @notice A struct that contains the assets and shares that a user has requested to redeem
-     * @param assets The amount of assets that the user has requested to redeem
-     * @param shares The amount of shares that the user has requested to redeem
+     * @notice A struct that contains the assets and shares that a account has requested to redeem
+     * @param assets The amount of assets that the account has requested to redeem
+     * @param shares The amount of shares that the account has requested to redeem
      */
     struct RedeemRequest {
         uint64 assets;
@@ -28,6 +28,20 @@ interface IHyperEvmVault {
      * @param escrow The address of the new escrow contract for the vault
      */
     event EscrowDeployed(address indexed escrow);
+
+    /**
+     * @notice Emitted when a new redeem request is made
+     * @param account The address of the account that made the redeem request
+     * @param shares The amount of shares the account requested to redeem
+     * @param assets The amount of assets the account requested to redeem
+     */
+    event RedeemRequested(address indexed account, uint256 shares, uint256 assets);
+
+    /**
+     * @notice Emitted when the admin withdraws the accumulated fees from the vault
+     * @param amount The amount of fees withdrawn
+     */
+    event FeesWithdrawn(uint256 amount);
 
     /*//////////////////////////////////////////////////////////////
                             External Functions

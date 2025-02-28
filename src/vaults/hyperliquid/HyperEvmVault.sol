@@ -39,6 +39,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     /// @notice The amount of fees that have been accumulated by the vault
     uint256 private _feesAccumulated;
 
+    /// @notice The minimum amount of assets that can be deposited into the vault
+    uint256 public minDepositAmount;
+
     /// @notice An array of addresses of escrow contracts for the vault
     address[] public escrows;
 
@@ -76,12 +79,15 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         uint64 assetIndex_,
         uint8 assetPerpDecimals_,
         address l1Vault_,
+        uint256 minDeposit_,
         address owner_
     ) ERC4626(asset_, name_, symbol_) Ownable(owner_) {
         require(l1Vault_ != address(0), Errors.ADDRESS_ZERO());
 
         _l1Vault = l1Vault_;
         lastL1Block = l1Block();
+        minDepositAmount = minDeposit_;
+
         _deployEscrows(escrowCount_, l1Vault_, asset_, assetIndex_, assetPerpDecimals_);
     }
 
@@ -98,11 +104,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
             shares = assets;
             _lastFeeCollectionTimestamp = block.timestamp;
         } else {
-            uint256 grossAssets = _totalEscrowValue();
-            _takeFee(grossAssets);
-            uint256 accumulatedFees = _feesAccumulated;
-            uint256 netAssets = grossAssets > accumulatedFees ? grossAssets - accumulatedFees : 0;
-            shares = assets.mulDivDown(supply, netAssets);
+            shares = assets.mulDivDown(supply, _netAssets());
         }
 
         asset.safeTransferFrom(msg.sender, address(this), assets);
@@ -123,11 +125,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
             shares = assets;
             _lastFeeCollectionTimestamp = block.timestamp;
         } else {
-            uint256 grossAssets = _totalEscrowValue();
-            _takeFee(grossAssets);
-            uint256 accumulatedFees = _feesAccumulated;
-            uint256 netAssets = grossAssets > accumulatedFees ? grossAssets - accumulatedFees : 0;
-            assets = shares.mulDivDown(netAssets, supply);
+            assets = shares.mulDivDown(_netAssets(), supply);
         }
 
         asset.safeTransferFrom(msg.sender, address(this), assets);
@@ -150,13 +148,11 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         require(request.shares <= balance, "Error"); // UPDATE ERROR CODE
 
         // User will redeem assets at the current share price
-        uint256 grossAssets = _totalEscrowValue();
-        _takeFee(grossAssets);
-        uint256 accumulatedFees = _feesAccumulated;
-        uint256 netAssets = grossAssets > accumulatedFees ? grossAssets - accumulatedFees : 0;
-        uint256 assetsToRedeem = shares_.mulDivDown(netAssets, totalSupply);
+        uint256 assetsToRedeem = shares_.mulDivDown(_netAssets(), totalSupply);
 
         request.assets += uint64(assetsToRedeem);
+
+        emit RedeemRequested(msg.sender, shares_, assetsToRedeem);
 
         VaultEscrow escrowToRedeem = VaultEscrow(escrows[redeemEscrowIndex()]);
         escrowToRedeem.withdraw(uint64(assetsToRedeem));
@@ -246,6 +242,19 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         }
 
         return assets_;
+    }
+
+    /**
+     * @notice Internal helper function for calculating the net assets of the vault after fees have been taken
+     * @dev This function updates state by updating fees accumulated & last fee collection timestamp
+     * @return netAssets_ The net assets of the vault after fees have been taken
+     */
+    function _netAssets() internal returns (uint256) {
+        uint256 grossAssets = _totalEscrowValue();
+        _takeFee(grossAssets);
+        uint256 accumulatedFees = _feesAccumulated;
+        uint256 netAssets = grossAssets > accumulatedFees ? grossAssets - accumulatedFees : 0;
+        return netAssets;
     }
 
     /**
@@ -344,9 +353,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         RedeemRequest memory request = redeemRequests[from_];
 
         // Take a management fee on the total assets
-        uint256 grossAssets = _totalEscrowValue();
-        _takeFee(grossAssets);
-
+        _netAssets();
         if (request.shares > 0) {
             require(balance - amount_ >= request.shares, "Error"); // UPDATE ERROR CODE
         }

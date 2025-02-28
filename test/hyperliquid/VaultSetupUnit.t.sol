@@ -48,6 +48,7 @@ contract VaultSetupUnitTest is Test {
             1,
             6,
             l1Vault,
+            10e6,
             owner
         );
 
@@ -68,6 +69,7 @@ contract VaultSetupUnitTest is Test {
             1,
             6,
             address(0), // zero address for l1Vault
+            10e6,
             owner
         );
     }
@@ -81,11 +83,11 @@ contract VaultSetupUnitTest is Test {
             emit EscrowDeployed(address(0)); // Ignore the address
         }
 
-        vault = new HyperEvmVault("blHLP", "blHLP", escrowCount, ERC20(address(asset)), 1, 6, l1Vault, owner);
+        vault = new HyperEvmVault("blHLP", "blHLP", escrowCount, ERC20(address(asset)), 1, 6, l1Vault, 10e6, owner);
     }
 
     function test_OwnershipTransfer() public {
-        vault = new HyperEvmVault("blHLP", "blHLP", 7, ERC20(address(asset)), 1, 6, l1Vault, owner);
+        vault = new HyperEvmVault("blHLP", "blHLP", 7, ERC20(address(asset)), 1, 6, l1Vault, 10e6, owner);
 
         address newOwner = makeAddr("newOwner");
 
@@ -105,7 +107,7 @@ contract VaultSetupUnitTest is Test {
     //////////////////////////////////////////////////////////////*/
 
     function test_IndexCalculation() public {
-        vault = new HyperEvmVault("blHLP", "blHLP", 7, ERC20(address(asset)), 1, 6, l1Vault, owner);
+        vault = new HyperEvmVault("blHLP", "blHLP", 7, ERC20(address(asset)), 1, 6, l1Vault, 10e6, owner);
 
         uint256 initialTimestamp = 1740645825;
         // Sets the block timestamp to make current Index == 0

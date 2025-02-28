@@ -47,7 +47,7 @@ contract VaultUnitTest is Test {
 
         asset = new MockERC20("USDC", "USDC", 6);
 
-        wrapper = new HyperEvmVault("wHLP", "Wrapped HLP", 7, ERC20(address(asset)), 0, 8, l1Vault, owner);
+        wrapper = new HyperEvmVault("wHLP", "Wrapped HLP", 7, ERC20(address(asset)), 0, 8, l1Vault, 10e6, owner);
     }
 
     function test_deposit() public {
