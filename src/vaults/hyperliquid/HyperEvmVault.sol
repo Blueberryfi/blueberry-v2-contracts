@@ -85,7 +85,6 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         require(l1Vault_ != address(0), Errors.ADDRESS_ZERO());
 
         _l1Vault = l1Vault_;
-        lastL1Block = l1Block();
         minDepositAmount = minDeposit_;
 
         _deployEscrows(escrowCount_, l1Vault_, asset_, assetIndex_, assetPerpDecimals_);
@@ -302,7 +301,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     function _updateBlockDeposits(uint256 assets_) internal {
         uint256 l1Block_ = l1Block();
 
-        if (lastL1Block != l1Block_) {
+        if (lastL1Block != l1Block_ || lastL1Block == 0) {
             lastL1Block = l1Block_;
             currentBlockDeposits = assets_;
         } else {
