@@ -25,4 +25,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when the staticcall fails
     error STATICCALL_FAILED();
+
+    /// @notice Error thrown when the minimum deposit amount is not met
+    error MIN_DEPOSIT_AMOUNT();
 }

@@ -79,7 +79,7 @@ contract VaultEscrow is IVaultEscrow {
 
     /// @inheritdoc IVaultEscrow
     function deposit(uint64 amount) external onlyVaultWrapper {
-        ERC20(_asset).safeTransferFrom(msg.sender, HYPERLIQUID_SPOT_BRIDGE, amount);
+        ERC20(_asset).safeTransfer(HYPERLIQUID_SPOT_BRIDGE, amount);
 
         uint256 amountPerp = (_perpDecimals > _evmSpotDecimals)
             ? amount / (10 ** (_perpDecimals - _evmSpotDecimals))

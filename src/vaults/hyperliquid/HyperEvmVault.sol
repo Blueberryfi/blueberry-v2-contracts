@@ -96,6 +96,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
     /// @notice Overrides the ERC4626 deposit function to add custom fee logic + high water mark tracking
     function deposit(uint256 assets, address receiver) public override nonReentrant returns (uint256 shares) {
+        require(assets >= minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
         uint256 supply = totalSupply;
 
         if (supply == 0) {
@@ -106,7 +107,6 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
             shares = assets.mulDivDown(supply, _netAssets());
         }
 
-        asset.safeTransferFrom(msg.sender, address(this), assets);
         _mint(receiver, shares);
 
         emit Deposit(msg.sender, receiver, assets, shares);
@@ -121,13 +121,14 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
         if (supply == 0) {
             // If the vault is empty then we need to initialize high water mark & last fee collection timestamp
-            shares = assets;
+            assets = shares;
             _lastFeeCollectionTimestamp = block.timestamp;
         } else {
             assets = shares.mulDivDown(_netAssets(), supply);
         }
 
-        asset.safeTransferFrom(msg.sender, address(this), assets);
+        require(assets >= minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
+
         _mint(receiver, shares);
 
         emit Deposit(msg.sender, receiver, assets, shares);
@@ -315,8 +316,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
      */
     function _routeDeposit(uint256 assets_) internal {
         VaultEscrow escrowToDeposit = VaultEscrow(escrows[depositEscrowIndex()]);
-
-        asset.approve(address(escrowToDeposit), assets_);
+        asset.safeTransferFrom(msg.sender, address(escrowToDeposit), assets_);
         escrowToDeposit.deposit(uint64(assets_));
     }
 
