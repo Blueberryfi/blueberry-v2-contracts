@@ -18,14 +18,14 @@ contract DeployTestnet is Script {
         vm.startBroadcast(deployerPrivateKey);
     
         HyperEvmVault vault = new HyperEvmVault(
-            "wHLP",
             "Wrapped HLP",
+            "wHLP",
             7, // Number of escrows
             ERC20(ASSET),
             0, // Asset Index
-            8, // Asset Perp Decimals
+            6, // Asset Perp Decimals
             L1_VAULT,
-            10e6, // Min Deposit Amount
+            10e8, // Min Deposit Amount
             OWNER // Owner
         );
 
