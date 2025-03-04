@@ -6,12 +6,13 @@ Core smart contracts for the Blueberry V2 protocol.
 ### Overview
 Blueberry is a decentralized leverage lending protocol that allows users to lend and borrow assets with up to 25x leverage. Blueberry serves as the prime brokerage of DeFi allowing users to build and execute various trading strategies with or without leverage. This second version of Blueberry is a complete rewrite of the original protocol, keeping the core concepts of V1, while focusing on design improvements, security, and scalability. The goal is to increase the accessability of leverage trading to the masses in a decentralized and trustless manner. 
 
+**NOTE**: The first release of Blueberry v2 will be an unleveraged Hyperliquid vault that is backed by a tokenized HLP contract, `wHLP`.
+
 ### Documentation
 For more information on Blueberry V2, please refer to our [documentation](https://docs.blueberry.garden/).
 
 ### Repository Structure
-- `src/BlueberryGarden.sol`: The entry point and main contract of the Blueberry protocol. This contract serves as the money market for lending and borrowing assets, as well as routing those borrowed funds to the appropriate trading strategies.
-- `src/BToken.sol`: The ERC20 token contract that represents the user's share of the Blueberry money market. Users receive BToken when they deposit assets into the `BlueberryGarden`.
+- `src/vaults/hyperliquid`: The core logic for the Hyperliquid vault tokenization.
 
 ### Repository Setup
 1. Clone the repository
