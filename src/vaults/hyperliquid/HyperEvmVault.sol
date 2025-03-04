@@ -28,10 +28,10 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The last L1 block number that has been processed by the vault
-    uint256 public lastL1Block;
+    uint256 private _lastL1Block;
 
     /// @notice The amount of deposits that have been made in the current L1 block
-    uint256 public currentBlockDeposits;
+    uint256 private _currentBlockDeposits;
 
     /// @notice The last time the fees were collected
     uint256 private _lastFeeCollectionTimestamp;
@@ -40,13 +40,13 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     uint256 private _feesAccumulated;
 
     /// @notice The minimum amount of assets that can be deposited into the vault
-    uint256 public minDepositAmount;
+    uint256 private _minDepositAmount;
 
     /// @notice An array of addresses of escrow contracts for the vault
-    address[] public escrows;
+    address[] private _escrows;
 
     /// @notice A mapping of user addresses and how much they have requested to redeem
-    mapping(address => RedeemRequest) public redeemRequests;
+    mapping(address => RedeemRequest) private _redeemRequests;
 
     /*//////////////////////////////////////////////////////////////
                         Constants & Immutables
@@ -85,7 +85,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         require(l1Vault_ != address(0), Errors.ADDRESS_ZERO());
 
         _l1Vault = l1Vault_;
-        minDepositAmount = minDeposit_;
+        _minDepositAmount = minDeposit_;
 
         _deployEscrows(escrowCount_, l1Vault_, asset_, assetIndex_, assetPerpDecimals_);
     }
@@ -96,7 +96,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
     /// @notice Overrides the ERC4626 deposit function to add custom fee logic + high water mark tracking
     function deposit(uint256 assets, address receiver) public override nonReentrant returns (uint256 shares) {
-        require(assets >= minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
+        require(assets >= _minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
         uint256 supply = totalSupply;
 
         if (supply == 0) {
@@ -127,7 +127,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
             assets = shares.mulDivDown(_netAssets(), supply);
         }
 
-        require(assets >= minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
+        require(assets >= _minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
 
         _mint(receiver, shares);
 
@@ -141,11 +141,11 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     function requestRedeem(uint256 shares_) external nonReentrant {
         uint256 balance = this.balanceOf(msg.sender);
         // Determine if the user withdrawal request is valid
-        require(shares_ <= balance, "Error");
+        require(shares_ <= balance, Errors.INSUFFICIENT_BALANCE());
 
-        RedeemRequest storage request = redeemRequests[msg.sender];
+        RedeemRequest storage request = _redeemRequests[msg.sender];
         request.shares += shares_;
-        require(request.shares <= balance, "Error"); // UPDATE ERROR CODE
+        require(request.shares <= balance, Errors.INSUFFICIENT_BALANCE());
 
         // User will redeem assets at the current share price
         uint256 assetsToRedeem = shares_.mulDivDown(_netAssets(), totalSupply);
@@ -154,7 +154,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
         emit RedeemRequested(msg.sender, shares_, assetsToRedeem);
 
-        VaultEscrow escrowToRedeem = VaultEscrow(escrows[redeemEscrowIndex()]);
+        VaultEscrow escrowToRedeem = VaultEscrow(_escrows[redeemEscrowIndex()]);
         escrowToRedeem.withdraw(uint64(assetsToRedeem));
     }
 
@@ -186,22 +186,22 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
     /// @notice Overrides the ERC4626 previewWithdraw function to return the amount of shares a user can withdraw
     function previewWithdraw(uint256 assets_) public view override returns (uint256) {
-        RedeemRequest memory request = redeemRequests[msg.sender];
+        RedeemRequest memory request = _redeemRequests[msg.sender];
         return assets_.mulDivUp(request.shares, request.assets);
     }
 
     /// @notice Overrides the ERC4626 previewRedeem function to return the amount of assets a user can redeem
     function previewRedeem(uint256 shares_) public view override returns (uint256) {
-        RedeemRequest memory request = redeemRequests[msg.sender];
+        RedeemRequest memory request = _redeemRequests[msg.sender];
         return shares_.mulDivDown(request.assets, request.shares);
     }
 
     /// @notice Overrides the ERC4626 beforeWithdraw function to update the redeem requests & retrieve assets from the
     ///         escrow contracts
     function beforeWithdraw(uint256 assets_, uint256 shares_) internal override {
-        RedeemRequest memory request = redeemRequests[msg.sender];
-        require(request.assets >= assets_, "Error");
-        require(request.shares >= shares_, "Error");
+        RedeemRequest memory request = _redeemRequests[msg.sender];
+        require(request.assets >= assets_, Errors.WITHDRAW_TOO_LARGE());
+        require(request.shares >= shares_, Errors.WITHDRAW_TOO_LARGE());
 
         request.assets -= uint64(assets_);
         request.shares -= shares_;
@@ -231,14 +231,14 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
      * @return assets_ The total amount of assets locked by the vault
      */
     function _totalEscrowValue() internal view returns (uint256 assets_) {
-        uint256 escrowLength = escrows.length;
+        uint256 escrowLength = _escrows.length;
         for (uint256 i = 0; i < escrowLength; ++i) {
-            VaultEscrow escrow = VaultEscrow(escrows[i]);
+            VaultEscrow escrow = VaultEscrow(_escrows[i]);
             assets_ += escrow.tvl();
         }
 
-        if (lastL1Block == l1Block()) {
-            assets_ += currentBlockDeposits;
+        if (_lastL1Block == l1Block()) {
+            assets_ += _currentBlockDeposits;
         }
 
         return assets_;
@@ -302,11 +302,11 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
     function _updateBlockDeposits(uint256 assets_) internal {
         uint256 l1Block_ = l1Block();
 
-        if (lastL1Block != l1Block_ || lastL1Block == 0) {
-            lastL1Block = l1Block_;
-            currentBlockDeposits = assets_;
+        if (_lastL1Block != l1Block_ || _lastL1Block == 0) {
+            _lastL1Block = l1Block_;
+            _currentBlockDeposits = assets_;
         } else {
-            currentBlockDeposits += assets_;
+            _currentBlockDeposits += assets_;
         }
     }
 
@@ -315,7 +315,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
      * @param assets_ The amount of assets to route to the escrow contract
      */
     function _routeDeposit(uint256 assets_) internal {
-        VaultEscrow escrowToDeposit = VaultEscrow(escrows[depositEscrowIndex()]);
+        VaultEscrow escrowToDeposit = VaultEscrow(_escrows[depositEscrowIndex()]);
         asset.safeTransferFrom(msg.sender, address(escrowToDeposit), assets_);
         escrowToDeposit.deposit(uint64(assets_));
     }
@@ -334,7 +334,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
         for (uint256 i = 0; i < escrowCount_; ++i) {
             VaultEscrow escrow =
                 new VaultEscrow(address(this), l1Vault_, address(asset_), assetindex_, assetPerpDecimals_);
-            escrows.push(address(escrow));
+            _escrows.push(address(escrow));
             emit EscrowDeployed(address(escrow));
         }
     }
@@ -349,12 +349,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
      */
     function _beforeTransfer(address from_, address, /*to_*/ uint256 amount_) internal {
         uint256 balance = this.balanceOf(from_);
-        RedeemRequest memory request = redeemRequests[from_];
+        RedeemRequest memory request = _redeemRequests[from_];
 
         // Take a management fee on the total assets
         _netAssets();
         if (request.shares > 0) {
-            require(balance - amount_ >= request.shares, "Error"); // UPDATE ERROR CODE
+            require(balance - amount_ >= request.shares, Errors.TRANSFER_BLOCKED()); // UPDATE ERROR CODE
         }
     }
 
@@ -364,9 +364,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
      */
     function _fetchAssets(uint256 assets_) internal {
         uint256 startIndex = redeemEscrowIndex();
-        uint256 len = escrows.length;
+        uint256 len = _escrows.length;
 
-        address[] memory cachedEscrows = escrows;
+        address[] memory cachedEscrows = _escrows;
 
         for (uint256 i = 0; i < len; ++i) {
             // Get the current escrow index with a circular index
@@ -387,7 +387,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
             }
         }
 
-        require(assets_ == 0, "Error"); //TODO: Update with custom error
+        require(assets_ == 0, Errors.FETCH_ASSETS_FAILED());
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -408,7 +408,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
     /// @inheritdoc IHyperEvmVault
     function depositEscrowIndex() public view returns (uint256) {
-        uint256 len = escrows.length;
+        uint256 len = _escrows.length;
         if (len == 1) {
             return 0;
         }
@@ -418,7 +418,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
     /// @inheritdoc IHyperEvmVault
     function redeemEscrowIndex() public view returns (uint256) {
-        uint256 len = escrows.length;
+        uint256 len = _escrows.length;
         if (len == 1) {
             return 0;
         }
@@ -429,5 +429,33 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626, Ownable2Step, ReentrancyGuard
 
     function feesAccumulated() public view returns (uint256) {
         return _feesAccumulated;
+    }
+
+    function minDepositAmount() public view returns (uint256) {
+        return _minDepositAmount;
+    }
+
+    function escrows(uint256 index) public view returns (address) {
+        return _escrows[index];
+    }
+
+    function escrowsLength() public view returns (uint256) {
+        return _escrows.length;
+    }
+
+    function redeemRequests(address user) public view returns (RedeemRequest memory) {
+        return _redeemRequests[user];
+    }
+
+    function lastL1Block() public view returns (uint256) {
+        return _lastL1Block;
+    }
+
+    function currentBlockDeposits() public view returns (uint256) {
+        return _currentBlockDeposits;
+    }
+
+    function lastFeeCollectionTimestamp() public view returns (uint256) {
+        return _lastFeeCollectionTimestamp;
     }
 }
