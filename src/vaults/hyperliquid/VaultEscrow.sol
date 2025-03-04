@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.28;
 
-import {IVaultEscrow} from "./interfaces/IVaultEscrow.sol";
-import {BlueberryErrors as Errors} from "../../helpers/BlueberryErrors.sol";
-import {IL1Write} from "./interfaces/IL1Write.sol";
-import {SafeTransferLib} from "@solmate/utils/SafeTransferLib.sol";
-import {ERC20} from "@solmate/tokens/ERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ERC20Upgradeable} from "@openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+
+import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
+
+import {IL1Write} from "@blueberry-v2/vaults/hyperliquid/interfaces/IL1Write.sol";
+import {IVaultEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/IVaultEscrow.sol";
 
 /**
  * @title VaultEscrow
@@ -16,7 +18,7 @@ import {ERC20} from "@solmate/tokens/ERC20.sol";
  *      to have at least 1 more escrow contract than the number of deposit locks enforced on the L1 vault.
  */
 contract VaultEscrow is IVaultEscrow {
-    using SafeTransferLib for ERC20;
+    using SafeERC20 for ERC20Upgradeable;
 
     /*//////////////////////////////////////////////////////////////
                         Constants & Immutables
@@ -62,15 +64,18 @@ contract VaultEscrow is IVaultEscrow {
     //////////////////////////////////////////////////////////////*/
 
     constructor(address wrapper_, address vault_, address asset_, uint64 assetIndex_, uint8 assetPerpDecimals_) {
+        require(wrapper_ != address(0) || vault_ != address(0) || asset_ != address(0), Errors.ADDRESS_ZERO());
+        require(assetPerpDecimals_ > 0, Errors.INVALID_PERP_DECIMALS());
+
         _vaultWrapper = wrapper_;
         _vault = vault_;
         _asset = asset_;
         _assetIndex = assetIndex_;
-        _evmSpotDecimals = ERC20(asset_).decimals();
+        _evmSpotDecimals = ERC20Upgradeable(asset_).decimals();
         _perpDecimals = assetPerpDecimals_;
 
         // Max approve the assets to be spent by the wrapper
-        ERC20(asset_).safeApprove(wrapper_, type(uint256).max);
+        ERC20Upgradeable(asset_).forceApprove(wrapper_, type(uint256).max);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -79,7 +84,7 @@ contract VaultEscrow is IVaultEscrow {
 
     /// @inheritdoc IVaultEscrow
     function deposit(uint64 amount) external onlyVaultWrapper {
-        ERC20(_asset).safeTransfer(HYPERLIQUID_SPOT_BRIDGE, amount);
+        ERC20Upgradeable(_asset).safeTransfer(HYPERLIQUID_SPOT_BRIDGE, amount);
 
         uint256 amountPerp = (_perpDecimals > _evmSpotDecimals)
             ? amount * (10 ** (_perpDecimals - _evmSpotDecimals))
@@ -110,8 +115,13 @@ contract VaultEscrow is IVaultEscrow {
             VAULT_EQUITY_PRECOMPILE_ADDRESS.staticcall(abi.encode(address(this), _vault));
         require(success, "VaultEquity precompile call failed");
         UserVaultEquity memory userVaultEquity = abi.decode(result, (UserVaultEquity));
-        uint256 assetBalance = ERC20(_asset).balanceOf(address(this));
-        return userVaultEquity.equity + assetBalance;
+
+        uint256 equityInSpot = (_perpDecimals > _evmSpotDecimals)
+            ? userVaultEquity.equity / (10 ** (_perpDecimals - _evmSpotDecimals))
+            : userVaultEquity.equity * (10 ** (_evmSpotDecimals - _perpDecimals));
+
+        uint256 assetBalance = ERC20Upgradeable(_asset).balanceOf(address(this));
+        return equityInSpot + assetBalance;
     }
 
     /// @inheritdoc IVaultEscrow
@@ -132,5 +142,15 @@ contract VaultEscrow is IVaultEscrow {
     /// @inheritdoc IVaultEscrow
     function assetIndex() external view returns (uint64) {
         return _assetIndex;
+    }
+
+    /// @inheritdoc IVaultEscrow
+    function assetDecimals() external view returns (uint8) {
+        return _evmSpotDecimals;
+    }
+
+    /// @inheritdoc IVaultEscrow
+    function assetPerpDecimals() external view returns (uint8) {
+        return _perpDecimals;
     }
 }

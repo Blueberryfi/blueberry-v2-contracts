@@ -7,6 +7,7 @@ import {HyperEvmVault} from "../../src/vaults/hyperliquid/HyperEvmVault.sol";
 import {VaultEscrow} from "../../src/vaults/hyperliquid/VaultEscrow.sol";
 import {BlueberryErrors} from "../../src/helpers/BlueberryErrors.sol";
 import {MockL1BlockNumberPrecompile} from "../mocks/MockHyperliquidPrecompiles.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract VaultSetupUnitTest is Test {
     HyperEvmVault public vault;
@@ -39,39 +40,31 @@ contract VaultSetupUnitTest is Test {
                             Setup Tests
     //////////////////////////////////////////////////////////////*/
 
-    function test_Constructor() public {
-        vault = new HyperEvmVault(
-            "Blueberry HLP",
-            "blHLP",
-            7, // escrow count
-            ERC20(address(asset)),
-            1,
-            6,
-            l1Vault,
-            10e6,
-            owner
+    function test_Initializer() public {
+        address implementation = address(new HyperEvmVault(l1Vault));
+        vault = HyperEvmVault(
+            address(
+                new ERC1967Proxy(
+                    implementation,
+                    abi.encodeWithSelector(
+                        HyperEvmVault.initialize.selector, "Wrapped HLP", "wHLP", address(asset), 0, 8, 10e8, 7, owner
+                    )
+                )
+            )
         );
 
-        assertEq(vault.name(), "Blueberry HLP");
-        assertEq(vault.symbol(), "blHLP");
+        assertEq(vault.name(), "Wrapped HLP");
+        assertEq(vault.symbol(), "wHLP");
         assertEq(address(vault.asset()), address(asset));
-        assertEq(vault.l1Vault(), l1Vault);
+        // assertEq(vault.assetIndex(), 0);
+        // assertEq(vault.assetPerpDecimals(), 8);
+        assertEq(vault.L1_VAULT(), l1Vault);
         assertEq(vault.owner(), owner);
     }
 
-    function test_RevertConstructor_ZeroL1Vault() public {
+    function test_RevertInitializer_ZeroL1Vault() public {
         vm.expectRevert(abi.encodeWithSignature("ADDRESS_ZERO()"));
-        vault = new HyperEvmVault(
-            "blHLP",
-            "blHLP",
-            7,
-            ERC20(address(asset)),
-            1,
-            6,
-            address(0), // zero address for l1Vault
-            10e6,
-            owner
-        );
+        address implementation = address(new HyperEvmVault(address(0)));
     }
 
     function test_EscrowDeployment() public {
@@ -83,11 +76,39 @@ contract VaultSetupUnitTest is Test {
             emit EscrowDeployed(address(0)); // Ignore the address
         }
 
-        vault = new HyperEvmVault("blHLP", "blHLP", escrowCount, ERC20(address(asset)), 1, 6, l1Vault, 10e6, owner);
+        address implementation = address(new HyperEvmVault(l1Vault));
+        vault = HyperEvmVault(
+            address(
+                new ERC1967Proxy(
+                    implementation,
+                    abi.encodeWithSelector(
+                        HyperEvmVault.initialize.selector,
+                        "Wrapped HLP",
+                        "wHLP",
+                        address(asset),
+                        0,
+                        8,
+                        10e8,
+                        escrowCount,
+                        owner
+                    )
+                )
+            )
+        );
     }
 
     function test_OwnershipTransfer() public {
-        vault = new HyperEvmVault("blHLP", "blHLP", 7, ERC20(address(asset)), 1, 6, l1Vault, 10e6, owner);
+        address implementation = address(new HyperEvmVault(l1Vault));
+        vault = HyperEvmVault(
+            address(
+                new ERC1967Proxy(
+                    implementation,
+                    abi.encodeWithSelector(
+                        HyperEvmVault.initialize.selector, "Wrapped HLP", "wHLP", address(asset), 0, 8, 10e8, 7, owner
+                    )
+                )
+            )
+        );
 
         address newOwner = makeAddr("newOwner");
 
@@ -107,7 +128,17 @@ contract VaultSetupUnitTest is Test {
     //////////////////////////////////////////////////////////////*/
 
     function test_IndexCalculation() public {
-        vault = new HyperEvmVault("blHLP", "blHLP", 7, ERC20(address(asset)), 1, 6, l1Vault, 10e6, owner);
+        address implementation = address(new HyperEvmVault(l1Vault));
+        vault = HyperEvmVault(
+            address(
+                new ERC1967Proxy(
+                    implementation,
+                    abi.encodeWithSelector(
+                        HyperEvmVault.initialize.selector, "Wrapped HLP", "wHLP", address(asset), 0, 8, 10e8, 7, owner
+                    )
+                )
+            )
+        );
 
         uint256 initialTimestamp = 1740645825;
         // Sets the block timestamp to make current Index == 0

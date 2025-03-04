@@ -7,6 +7,7 @@ import {HyperEvmVault} from "../src/vaults/hyperliquid/HyperEvmVault.sol";
 import {VaultEscrow} from "../src/vaults/hyperliquid/VaultEscrow.sol";
 import {console} from "forge-std/console.sol";
 import {L1Actions} from "../src/vaults/hyperliquid/utils/L1Actions.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DeployTestnet is Script {
     address public constant L1_VAULT = 0xa15099a30BBf2e68942d6F4c43d70D04FAEab0A0;
@@ -16,17 +17,26 @@ contract DeployTestnet is Script {
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
-    
-        HyperEvmVault vault = new HyperEvmVault(
-            "Wrapped HLP",
-            "wHLP",
-            7, // Number of escrows
-            ERC20(ASSET),
-            0, // Asset Index
-            6, // Asset Perp Decimals
-            L1_VAULT,
-            10e8, // Min Deposit Amount
-            OWNER // Owner
+
+        address implementation = address(new HyperEvmVault(L1_VAULT));
+        HyperEvmVault vault = HyperEvmVault(
+            address(
+                new ERC1967Proxy(
+                    implementation,
+                    abi.encodeWithSelector(
+                        HyperEvmVault.initialize.selector,
+                        "Wrapped HLP",
+                        "wHLP",
+                        ASSET,
+                        0, // Asset Index
+                        6, // Asset Perp Decimals
+                        L1_VAULT,
+                        10e8, // Min Deposit Amount
+                        7, // Number of escrows
+                        OWNER // Owner
+                    )
+                )
+            )
         );
 
         console.log("Vault deployed at", address(vault));

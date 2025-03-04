@@ -43,4 +43,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when a users withdraw request is too large
     error WITHDRAW_TOO_LARGE();
+
+    /// @notice Error thrown when the perp decimals are invalid
+    error INVALID_PERP_DECIMALS();
 }

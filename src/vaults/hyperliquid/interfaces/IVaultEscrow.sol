@@ -53,4 +53,10 @@ interface IVaultEscrow {
 
     /// @notice Returns the index of the asset in the hyperliquid spot
     function assetIndex() external view returns (uint64);
+
+    /// @notice Returns the decimals of the asset
+    function assetDecimals() external view returns (uint8);
+
+    /// @notice Returns the decimals of the asset in perps
+    function assetPerpDecimals() external view returns (uint8);
 }

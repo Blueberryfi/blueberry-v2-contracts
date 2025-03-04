@@ -63,19 +63,11 @@ interface IHyperEvmVault {
      */
     function tvl() external view returns (uint256 tvl_);
 
-    /**
-     * @notice Calculates the amount of fees to take from the vault
-     * @dev This function is almost idential to the feeTake function, but does not update state.
-     * @param preFeeTvl_ The total value of the vault before fees are taken
-     * @return feeTake_ The amount of fees to take in underlying assets
-     */
-    function previewFeeTake(uint256 preFeeTvl_) external view returns (uint256 feeTake_);
-
     /// @notice The L1 address of the vault being deposited into on Hyperliquid L1
-    function l1Vault() external view returns (address);
+    function L1_VAULT() external view returns (address);
 
     /// @notice Returns the current L1 block number through a precompile static call
-    function l1Block() external view returns (uint256);
+    function l1Block() external view returns (uint64);
 
     /**
      * @notice Calculates the index of the escrow contract that will be used to process deposits
