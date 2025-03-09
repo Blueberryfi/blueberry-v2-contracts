@@ -19,6 +19,7 @@ contract DeployTestnet is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         address implementation = address(new HyperEvmVault(L1_VAULT));
+        console.log("Implementation deployed at", address(implementation));
         HyperEvmVault vault = HyperEvmVault(
             address(
                 new ERC1967Proxy(
@@ -30,7 +31,6 @@ contract DeployTestnet is Script {
                         ASSET,
                         0, // Asset Index
                         6, // Asset Perp Decimals
-                        L1_VAULT,
                         10e8, // Min Deposit Amount
                         7, // Number of escrows
                         OWNER // Owner
@@ -39,7 +39,7 @@ contract DeployTestnet is Script {
             )
         );
 
-        console.log("Vault deployed at", address(vault));
+        console.log("Vault Proxy deployed at", address(vault));
 
         console.log("Escrow 0", address(vault.escrows(0)));
         console.log("Escrow 1", address(vault.escrows(1)));
