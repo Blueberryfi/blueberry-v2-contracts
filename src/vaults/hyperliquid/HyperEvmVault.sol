@@ -30,21 +30,22 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
     /// @custom:storage-location erc7201:hyperevm.vault.v1.storage
     struct V1Storage {
-        uint64 lastL1Block;
         /// @notice The last L1 block number that has been processed by the vault
-        uint64 currentBlockDeposits;
+        uint64 lastL1Block;
         /// @notice The amount of deposits that have been made in the current L1 block
-        uint64 lastFeeCollectionTimestamp;
+        uint64 currentBlockDeposits;
         /// @notice The last time the fees were collected
-        uint64 managementFeeBps;
+        uint64 lastFeeCollectionTimestamp;
         /// @notice The management fee in basis points
-        uint64 feesAccumulated;
-        /// @notice The amount of fees that have been accumulated by the vault
-        uint64 minDepositAmount;
+        uint64 managementFeeBps;
         /// @notice The minimum amount of assets that can be deposited into the vault
-        address[] escrows;
+        uint64 minDepositAmount;
         /// @notice An array of addresses of escrow contracts for the vault
+        address[] escrows;
+        /// @notice A mapping of user addresses to their redeem requests
         mapping(address => RedeemRequest) redeemRequests;
+        /// @notice The total amount of underlying assets that are in redemption requests
+        uint64 totalRedeemRequests;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -111,14 +112,15 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     function deposit(uint256 assets, address receiver) public override nonReentrant returns (uint256 shares) {
         V1Storage storage $ = _getV1Storage();
         require(assets >= $.minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
-        uint256 supply = totalSupply();
 
-        if (supply == 0) {
+        if (totalSupply() == 0) {
             // If the vault is empty then we need to initialize last fee collection timestamp
             shares = assets;
             $.lastFeeCollectionTimestamp = uint64(block.timestamp);
         } else {
-            shares = assets.mulDivDown(supply, _netAssets($));
+            uint256 tvl_ = _totalEscrowValue($);
+            _takeFee($, tvl_);
+            shares = assets.mulDivDown(totalSupply(), tvl_);
         }
 
         _mint(receiver, shares);
@@ -132,14 +134,15 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     /// @notice Overrides the ERC4626 mint function to add custom fee logic + high water mark tracking
     function mint(uint256 shares, address receiver) public override nonReentrant returns (uint256 assets) {
         V1Storage storage $ = _getV1Storage();
-        uint256 supply = totalSupply();
 
-        if (supply == 0) {
+        if (totalSupply() == 0) {
             // If the vault is empty then we need to initialize high water mark & last fee collection timestamp
             assets = shares;
             $.lastFeeCollectionTimestamp = uint64(block.timestamp);
         } else {
-            assets = shares.mulDivDown(_netAssets($), supply);
+            uint256 tvl_ = _totalEscrowValue($);
+            _takeFee($, tvl_);
+            assets = shares.mulDivDown(tvl_, totalSupply()); // We do not cache total supply due to its potential to change during the fee take
         }
 
         require(assets >= $.minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
@@ -164,10 +167,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         require(request.shares <= balance, Errors.INSUFFICIENT_BALANCE());
 
         // User will redeem assets at the current share price
-        uint256 assetsToRedeem = shares_.mulDivDown(_netAssets($), totalSupply());
+        uint256 tvl_ = _totalEscrowValue($);
+        _takeFee($, tvl_);
+        uint256 assetsToRedeem = shares_.mulDivDown(tvl_, totalSupply());
 
         request.assets += uint64(assetsToRedeem);
-
+        $.totalRedeemRequests += uint64(assetsToRedeem);
         emit RedeemRequested(msg.sender, shares_, assetsToRedeem);
 
         VaultEscrow escrowToRedeem = VaultEscrow($.escrows[redeemEscrowIndex()]);
@@ -175,17 +180,16 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     }
 
     /// @inheritdoc IHyperEvmVault
-    function tvl() public view returns (uint256 tvl_) {
+    function tvl() public view returns (uint256) {
         V1Storage storage $ = _getV1Storage();
-        tvl_ = _totalEscrowValue($);
+        return _totalEscrowValue($);
+    }
 
-        uint256 pendingFees = _calculateFee($, tvl_) + $.feesAccumulated;
-
-        if (pendingFees < tvl_) {
-            tvl_ -= pendingFees;
-        } else {
-            tvl_ = 0;
-        }
+    /// @inheritdoc IHyperEvmVault
+    function maxWithdrawableAssets() public view returns (uint256) {
+        V1Storage storage $ = _getV1Storage();
+        VaultEscrow escrowToRedeem = VaultEscrow($.escrows[redeemEscrowIndex()]);
+        return escrowToRedeem.vaultEquity();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -197,14 +201,32 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         return tvl();
     }
 
-    /// @notice Overrides the ERC4626 previewWithdraw function to return the amount of shares a user can withdraw
+    /// @notice Overrides the ERC4626 previewDeposit function to return the amount of shares a user can deposit
+    function previewDeposit(uint256 assets_) public view override returns (uint256) {
+        V1Storage storage $ = _getV1Storage();
+        uint256 tvl_ = _totalEscrowValue($);
+        uint256 feeShares = _previewFeeShares($, tvl_);
+        uint256 adjustedSupply = totalSupply() + feeShares;
+        return assets_.mulDivDown(adjustedSupply, tvl_);
+    }
+
+    /// @notice Overrides the ERC4626 previewMint function to return the amount of assets a user has to deposit for a given amount of shares
+    function previewMint(uint256 shares_) public view override returns (uint256) {
+        V1Storage storage $ = _getV1Storage();
+        uint256 tvl_ = _totalEscrowValue($);
+        uint256 feeShares = _previewFeeShares($, tvl_);
+        uint256 adjustedSupply = totalSupply() + feeShares;
+        return shares_.mulDivDown(tvl_, adjustedSupply);
+    }
+
+    /// @notice Overrides the ERC4626 previewWithdraw function to return the amount of shares a user can withdraw for a given amount of assets
     function previewWithdraw(uint256 assets_) public view override returns (uint256) {
         V1Storage storage $ = _getV1Storage();
         RedeemRequest memory request = $.redeemRequests[msg.sender];
         return assets_.mulDivUp(request.shares, request.assets);
     }
 
-    /// @notice Overrides the ERC4626 previewRedeem function to return the amount of assets a user can redeem
+    /// @notice Overrides the ERC4626 previewRedeem function to return the amount of assets a user can redeem for a given amount of shares
     function previewRedeem(uint256 shares_) public view override returns (uint256) {
         V1Storage storage $ = _getV1Storage();
         RedeemRequest memory request = $.redeemRequests[msg.sender];
@@ -230,6 +252,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
         request.assets -= uint64(assets_);
         request.shares -= shares_;
+        $.totalRedeemRequests -= uint64(assets_);
 
         _fetchAssets(assets_);
     }
@@ -275,20 +298,6 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     }
 
     /**
-     * @notice Internal helper function for calculating the net assets of the vault after fees have been taken
-     * @dev This function updates state by updating fees accumulated & last fee collection timestamp
-     * @param $ The storage pointer to the v1 vault storage
-     * @return netAssets_ The net assets of the vault after fees have been taken
-     */
-    function _netAssets(V1Storage storage $) internal returns (uint256) {
-        uint256 grossAssets = _totalEscrowValue($);
-        _takeFee($, grossAssets);
-        uint256 accumulatedFees = $.feesAccumulated;
-        uint256 netAssets = grossAssets > accumulatedFees ? grossAssets - accumulatedFees : 0;
-        return netAssets;
-    }
-
-    /**
      * @notice Calculates the management fee based on time elapsed since last collection
      * @param $ The storage pointer to the v1 vault storage
      * @param grossAssets The total value of the vault
@@ -302,10 +311,24 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         // Calculate time elapsed since last fee collection
         uint256 timeElapsed = block.timestamp - $.lastFeeCollectionTimestamp;
 
+        // We subtract the pending redemption requests from the total asset value to avoid taking more fees than needed from
+        //    users who do not have any pending redemption requests
+        uint256 eligibleForFeeTake = grossAssets - $.totalRedeemRequests;
         // Calculate the pro-rated management fee based on time elapsed
-        feeAmount_ = grossAssets * $.managementFeeBps * timeElapsed / BPS_DENOMINATOR / ONE_YEAR;
+        feeAmount_ = eligibleForFeeTake * $.managementFeeBps * timeElapsed / BPS_DENOMINATOR / ONE_YEAR;
 
         return feeAmount_;
+    }
+
+    /**
+     * @notice Internal helper function to calculate the amount of shares that will be minted for the fee collector
+     * @param $ The storage pointer to the v1 vault storage
+     * @param tvl_ The total value of the vault
+     * @return feeShares_ The amount of shares that will be minted for the fee collector
+     */
+    function _previewFeeShares(V1Storage storage $, uint256 tvl_) internal view returns (uint256) {
+        uint256 expectedFee = _calculateFee($, tvl_);
+        return _convertToShares(expectedFee, Math.Rounding.Floor);
     }
 
     /**
@@ -320,9 +343,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         // Only update state if there's a fee to take
         if (feeTake_ > 0) {
             $.lastFeeCollectionTimestamp = uint64(block.timestamp);
-            $.feesAccumulated += uint64(feeTake_);
+            uint256 sharesToMint = feeTake_.mulDivDown(totalSupply(), grossAssets);
+            _mint(owner(), sharesToMint);
         }
-
         return feeTake_;
     }
 
@@ -385,9 +408,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         RedeemRequest memory request = $.redeemRequests[from_];
 
         // Take a management fee on the total assets
-        _netAssets($);
+        _takeFee($, _totalEscrowValue($));
         if (request.shares > 0) {
-            require(balance - amount_ >= request.shares, Errors.TRANSFER_BLOCKED()); // UPDATE ERROR CODE
+            require(balance - amount_ >= request.shares, Errors.TRANSFER_BLOCKED());
         }
     }
 
@@ -445,13 +468,6 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         _getV1Storage().minDepositAmount = newMinDepositAmount_;
     }
 
-    // function requestFeeWithdrawal() external onlyOwner {
-    //     V1Storage storage $ = _getV1Storage();
-    //     _takeFee($, _totalEscrowValue($));
-    //     uint256 fees = $.feesAccumulated;
-    //     $.feesAccumulated = 0;
-    // }
-
     /*//////////////////////////////////////////////////////////////
                             View Functions
     //////////////////////////////////////////////////////////////*/
@@ -482,10 +498,6 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
         uint256 depositIndex = depositEscrowIndex();
         return (depositIndex + 1) % len;
-    }
-
-    function feesAccumulated() public view returns (uint64) {
-        return _getV1Storage().feesAccumulated;
     }
 
     function minDepositAmount() public view returns (uint256) {

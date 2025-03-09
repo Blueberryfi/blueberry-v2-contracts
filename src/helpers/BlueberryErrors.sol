@@ -46,4 +46,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when the perp decimals are invalid
     error INVALID_PERP_DECIMALS();
+
+    /// @notice Error thrown when the vault equity is insufficient to withdraw
+    error INSUFFICIENT_VAULT_EQUITY();
 }

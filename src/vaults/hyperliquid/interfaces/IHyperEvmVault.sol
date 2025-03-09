@@ -80,4 +80,10 @@ interface IHyperEvmVault {
      * @return The index of the escrow contract redemptions will be routed through
      */
     function redeemEscrowIndex() external view returns (uint256);
+
+    /**
+     * @notice Calculates the max amount of assets that can be requested to be withdrawn for redemption
+     * @return The max amount of assets that can be requested to be withdrawn
+     */
+    function maxWithdrawableAssets() external view returns (uint256);
 }

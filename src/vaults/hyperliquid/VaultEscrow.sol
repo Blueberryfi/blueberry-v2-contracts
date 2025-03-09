@@ -96,6 +96,8 @@ contract VaultEscrow is IVaultEscrow {
 
     /// @inheritdoc IVaultEscrow
     function withdraw(uint64 assets_) external override onlyVaultWrapper {
+        require(assets_ <= _vaultEquity(), Errors.INSUFFICIENT_VAULT_EQUITY());
+
         uint256 amountPerp = (_perpDecimals > _evmSpotDecimals)
             ? assets_ * (10 ** (_perpDecimals - _evmSpotDecimals))
             : assets_ / (10 ** (_evmSpotDecimals - _perpDecimals));
@@ -106,22 +108,35 @@ contract VaultEscrow is IVaultEscrow {
     }
 
     /*//////////////////////////////////////////////////////////////
-                            View Functions
+                            Internal Functions
     //////////////////////////////////////////////////////////////*/
 
-    /// @inheritdoc IVaultEscrow
-    function tvl() public view returns (uint256) {
+    function _vaultEquity() internal view returns (uint256) {
         (bool success, bytes memory result) =
             VAULT_EQUITY_PRECOMPILE_ADDRESS.staticcall(abi.encode(address(this), _vault));
         require(success, "VaultEquity precompile call failed");
+
         UserVaultEquity memory userVaultEquity = abi.decode(result, (UserVaultEquity));
 
         uint256 equityInSpot = (_perpDecimals > _evmSpotDecimals)
             ? userVaultEquity.equity / (10 ** (_perpDecimals - _evmSpotDecimals))
             : userVaultEquity.equity * (10 ** (_evmSpotDecimals - _perpDecimals));
 
+        return equityInSpot;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            View Functions
+    //////////////////////////////////////////////////////////////*/
+
+    /// @inheritdoc IVaultEscrow
+    function tvl() public view returns (uint256) {
         uint256 assetBalance = ERC20Upgradeable(_asset).balanceOf(address(this));
-        return equityInSpot + assetBalance;
+        return _vaultEquity() + assetBalance;
+    }
+
+    function vaultEquity() external view returns (uint256) {
+        return _vaultEquity();
     }
 
     /// @inheritdoc IVaultEscrow
