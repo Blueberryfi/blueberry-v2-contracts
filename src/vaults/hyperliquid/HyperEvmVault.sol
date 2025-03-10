@@ -343,7 +343,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         // Only update state if there's a fee to take
         if (feeTake_ > 0) {
             $.lastFeeCollectionTimestamp = uint64(block.timestamp);
-            uint256 sharesToMint = feeTake_.mulDivDown(totalSupply(), grossAssets);
+            uint256 sharesToMint = _convertToShares(feeTake_, Math.Rounding.Floor);
             _mint(owner(), sharesToMint);
         }
         return feeTake_;

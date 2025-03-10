@@ -6,7 +6,6 @@ import {ERC20} from "@solmate/tokens/ERC20.sol";
 import {HyperEvmVault} from "../src/vaults/hyperliquid/HyperEvmVault.sol";
 import {VaultEscrow} from "../src/vaults/hyperliquid/VaultEscrow.sol";
 import {console} from "forge-std/console.sol";
-import {L1Actions} from "../src/vaults/hyperliquid/utils/L1Actions.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DeployTestnet is Script {

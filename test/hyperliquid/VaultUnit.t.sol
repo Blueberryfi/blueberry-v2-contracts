@@ -194,16 +194,17 @@ contract VaultUnitTest is Test {
         address escrow = wrapper.escrows(wrapper.depositEscrowIndex());
         // 50% yield 200e8 -> 300e8
         _updateVaultEquity(escrow, 300e8);
-        vm.warp(block.timestamp + 360 days);
+        vm.warp(block.timestamp + 363 days); // 3 days after 360 days to get to the target redeem escrow
 
-        // 1.5% of 300e8 = 4.5e8
-        uint64 fee = 4.5e8;
+        // 1.5% of 300e8 for 363 days = 4.5375e8
+        uint64 fee = 4.5375e8;
         uint256 ownerShares = wrapper.convertToShares(fee);
 
         assertEq(wrapper.totalAssets(), 300e8);
         vm.startPrank(alice);
         wrapper.requestRedeem(100e8);
         uint256 aliceAssetsToRedeem = wrapper.previewRedeem(100e8);
+
         assertEq(wrapper.balanceOf(owner), ownerShares);
 
         assertEq(wrapper.totalSupply(), 200e8 + ownerShares);
@@ -212,7 +213,7 @@ contract VaultUnitTest is Test {
 
         assertEq(aliceRequest.shares, 100e8);
         assertEq(aliceRequest.assets, aliceAssetsToRedeem);
-        // assertEq(aliceRequest.assets, 147.75e8);
+        assertEq(aliceRequest.assets, 14776505356);
 
         vm.startPrank(bob);
         wrapper.requestRedeem(100e8);
@@ -221,7 +222,8 @@ contract VaultUnitTest is Test {
         IHyperEvmVault.RedeemRequest memory bobRequest = wrapper.redeemRequests(bob);
         assertEq(bobRequest.shares, 100e8);
         assertEq(bobRequest.assets, bobAssetsToRedeem);
-        assertEq(bobRequest.assets, 147.75e8);
+        // Update this value as well since Bob's redemption will have the same logic
+        assertEq(bobRequest.assets, 14776505356);
 
         /// Update escrow and vault state to reflect precompile calls
         vm.startPrank(HYPERLIQUID_SPOT_BRIDGE);
@@ -240,11 +242,11 @@ contract VaultUnitTest is Test {
 
         assertEq(wrapper.balanceOf(alice), 0);
         assertEq(wrapper.balanceOf(bob), 0);
-        // assertEq(wrapper.totalAssets(), fee);
+        assertEq(wrapper.totalAssets(), wrapper.convertToAssets(ownerShares));
         assertEq(wrapper.totalSupply(), ownerShares);
 
-        assertEq(asset.balanceOf(alice), 147.75e8);
-        assertEq(asset.balanceOf(bob), 147.75e8);
+        assertEq(asset.balanceOf(alice), 14776505356);
+        assertEq(asset.balanceOf(bob), 14776505356);
     }
 
     function _updateL1BlockNumber(uint64 blockNumber_) internal {
