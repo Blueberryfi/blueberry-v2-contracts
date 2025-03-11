@@ -90,7 +90,9 @@ contract VaultEscrow is IVaultEscrow {
             ? amount * (10 ** (_perpDecimals - _evmSpotDecimals))
             : amount / (10 ** (_evmSpotDecimals - _perpDecimals));
 
+        // Transfer assets to L1 perps
         L1_WRITE_PRECOMPILE.sendUsdClassTransfer(uint64(amountPerp), true);
+        // Deposit assets in L1 vault
         L1_WRITE_PRECOMPILE.sendVaultTransfer(_vault, true, uint64(amountPerp));
     }
 
@@ -102,8 +104,11 @@ contract VaultEscrow is IVaultEscrow {
             ? assets_ * (10 ** (_perpDecimals - _evmSpotDecimals))
             : assets_ / (10 ** (_evmSpotDecimals - _perpDecimals));
 
+        // Withdraws assets from L1 vault
         L1_WRITE_PRECOMPILE.sendVaultTransfer(_vault, false, uint64(amountPerp));
+        // Transfer assets to L1 spot
         L1_WRITE_PRECOMPILE.sendUsdClassTransfer(uint64(amountPerp), false);
+        // Bridges assets back to escrow's EVM account
         L1_WRITE_PRECOMPILE.sendSpot(HYPERLIQUID_SPOT_BRIDGE, _assetIndex, assets_);
     }
 

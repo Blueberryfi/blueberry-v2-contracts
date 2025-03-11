@@ -333,7 +333,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
     /**
      * @notice Takes the management fee from the vault
-     * @dev There is a 0.05% annual management fee on the vault's total assets.
+     * @dev There is a 0.015% annual management fee on the vault's total assets.
      * @param grossAssets The total value of the vault
      * @return The amount of fees to take in underlying assets
      */
