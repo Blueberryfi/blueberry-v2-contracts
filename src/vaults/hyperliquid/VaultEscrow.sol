@@ -16,6 +16,7 @@ import {IVaultEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/IVaultEs
  *         deposits locks enforced on the L1 vault. (Example: HLP 4-day lock)
  * @dev If there are no deposit locks, there only needs to be a single escrow contract. It is recommended
  *      to have at least 1 more escrow contract than the number of deposit locks enforced on the L1 vault.
+ *      For HLP we will have 7 escrow contracts.
  */
 contract VaultEscrow is IVaultEscrow {
     using SafeERC20 for ERC20Upgradeable;
@@ -140,6 +141,7 @@ contract VaultEscrow is IVaultEscrow {
         return _vaultEquity() + assetBalance;
     }
 
+    /// @inheritdoc IVaultEscrow
     function vaultEquity() external view returns (uint256) {
         return _vaultEquity();
     }

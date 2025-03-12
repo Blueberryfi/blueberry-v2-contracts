@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import {Ownable2StepUpgradeable} from "@openzeppelin-contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
-import {ERC4626Upgradeable} from "@openzeppelin-contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
+import {ERC4626Upgradeable, IERC4626} from "@openzeppelin-contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import {ERC20Upgradeable, IERC20} from "@openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -100,16 +100,17 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         __ERC4626_init(ERC20Upgradeable(asset_));
         __ERC20_init(name_, symbol_);
         __Ownable2Step_init();
-        _transferOwnership(owner_);
         __ReentrancyGuard_init();
+
+        _transferOwnership(owner_);
     }
 
     /*//////////////////////////////////////////////////////////////
                             External Functions
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Overrides the ERC4626 deposit function to add custom fee logic + high water mark tracking
-    function deposit(uint256 assets, address receiver) public override nonReentrant returns (uint256 shares) {
+    /// @notice Overrides the ERC4626 deposit function to add custom fee logic + routing deposits to the correct escrow contract
+    function deposit(uint256 assets, address receiver) public override(ERC4626Upgradeable, IERC4626) nonReentrant returns (uint256 shares) {
         V1Storage storage $ = _getV1Storage();
         require(assets >= $.minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
 
@@ -131,12 +132,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         _routeDeposit($, assets);
     }
 
-    /// @notice Overrides the ERC4626 mint function to add custom fee logic + high water mark tracking
-    function mint(uint256 shares, address receiver) public override nonReentrant returns (uint256 assets) {
+    /// @notice Overrides the ERC4626 mint function to add custom fee logic + routing deposits to the correct escrow contract
+    function mint(uint256 shares, address receiver) public override(ERC4626Upgradeable, IERC4626) nonReentrant returns (uint256 assets) {
         V1Storage storage $ = _getV1Storage();
 
         if (totalSupply() == 0) {
-            // If the vault is empty then we need to initialize high water mark & last fee collection timestamp
+            // If the vault is empty then we need to initialize last fee collection timestamp
             assets = shares;
             $.lastFeeCollectionTimestamp = uint64(block.timestamp);
         } else {
@@ -197,12 +198,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Overrides the ERC4626 totalAssets function to return the TVL of the vault
-    function totalAssets() public view override returns (uint256) {
+    function totalAssets() public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         return tvl();
     }
 
     /// @notice Overrides the ERC4626 previewDeposit function to return the amount of shares a user can deposit
-    function previewDeposit(uint256 assets_) public view override returns (uint256) {
+    function previewDeposit(uint256 assets_) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         V1Storage storage $ = _getV1Storage();
         uint256 tvl_ = _totalEscrowValue($);
         uint256 feeShares = _previewFeeShares($, tvl_);
@@ -211,7 +212,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     }
 
     /// @notice Overrides the ERC4626 previewMint function to return the amount of assets a user has to deposit for a given amount of shares
-    function previewMint(uint256 shares_) public view override returns (uint256) {
+    function previewMint(uint256 shares_) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         V1Storage storage $ = _getV1Storage();
         uint256 tvl_ = _totalEscrowValue($);
         uint256 feeShares = _previewFeeShares($, tvl_);
@@ -220,14 +221,14 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     }
 
     /// @notice Overrides the ERC4626 previewWithdraw function to return the amount of shares a user can withdraw for a given amount of assets
-    function previewWithdraw(uint256 assets_) public view override returns (uint256) {
+    function previewWithdraw(uint256 assets_) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         V1Storage storage $ = _getV1Storage();
         RedeemRequest memory request = $.redeemRequests[msg.sender];
         return assets_.mulDivUp(request.shares, request.assets);
     }
 
     /// @notice Overrides the ERC4626 previewRedeem function to return the amount of assets a user can redeem for a given amount of shares
-    function previewRedeem(uint256 shares_) public view override returns (uint256) {
+    function previewRedeem(uint256 shares_) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         V1Storage storage $ = _getV1Storage();
         RedeemRequest memory request = $.redeemRequests[msg.sender];
         return shares_.mulDivDown(request.assets, request.shares);
@@ -459,11 +460,13 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
                             Admin Functions
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Sets the management fee in basis points
     function setManagementFeeBps(uint64 newManagementFeeBps_) external onlyOwner {
         require(newManagementFeeBps_ <= BPS_DENOMINATOR, Errors.FEE_TOO_HIGH());
         _getV1Storage().managementFeeBps = newManagementFeeBps_;
     }
 
+    /// @notice Sets the minimum deposit amount for the vault
     function setMinDepositAmount(uint64 newMinDepositAmount_) external onlyOwner {
         _getV1Storage().minDepositAmount = newMinDepositAmount_;
     }
@@ -500,31 +503,38 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         return (depositIndex + 1) % len;
     }
 
-    function minDepositAmount() public view returns (uint256) {
+    /// @inheritdoc IHyperEvmVault
+    function minDepositAmount() external view override returns (uint256) {
         return _getV1Storage().minDepositAmount;
     }
 
-    function escrows(uint256 index) public view returns (address) {
+    /// @inheritdoc IHyperEvmVault
+    function escrows(uint256 index) external view override returns (address) {
         return _getV1Storage().escrows[index];
     }
 
-    function escrowsLength() public view returns (uint256) {
+    /// @inheritdoc IHyperEvmVault
+    function escrowsLength() external view override returns (uint256) {
         return _getV1Storage().escrows.length;
     }
 
-    function redeemRequests(address user) public view returns (RedeemRequest memory) {
+    /// @inheritdoc IHyperEvmVault
+    function redeemRequests(address user) external view override returns (RedeemRequest memory) {
         return _getV1Storage().redeemRequests[user];
     }
 
+    /// @inheritdoc IHyperEvmVault
     function lastL1Block() public view returns (uint64) {
         return _getV1Storage().lastL1Block;
     }
 
-    function currentBlockDeposits() public view returns (uint64) {
+    /// @inheritdoc IHyperEvmVault
+    function currentBlockDeposits() external view override returns (uint64) {
         return _getV1Storage().currentBlockDeposits;
     }
 
-    function lastFeeCollectionTimestamp() public view returns (uint64) {
+    /// @inheritdoc IHyperEvmVault
+    function lastFeeCollectionTimestamp() external view override returns (uint64) {
         return _getV1Storage().lastFeeCollectionTimestamp;
     }
 

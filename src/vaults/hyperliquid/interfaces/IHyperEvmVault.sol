@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+
 /**
  * @title IHyperEvmVault
  * @author Blueberry
  * @notice Interface for the ERC4626 compatible HyperEvmVault contract that will be deployed on Hyperliquid EVM
  */
-interface IHyperEvmVault {
+interface IHyperEvmVault is IERC4626 {
     /*//////////////////////////////////////////////////////////////
                                 Structs
     //////////////////////////////////////////////////////////////*/
@@ -86,4 +88,26 @@ interface IHyperEvmVault {
      * @return The max amount of assets that can be requested to be withdrawn
      */
     function maxWithdrawableAssets() external view returns (uint256);
+
+    /// @notice Returns the minimum amount of assets that can be deposited into the vault
+    function minDepositAmount() external view returns (uint256);
+
+    /// @notice Returns the address of the escrow contract at a given index
+    function escrows(uint256 index) external view returns (address);
+
+    /// @notice Returns the number of escrow contracts deployed for the vault
+    function escrowsLength() external view returns (uint256);
+
+    /// @notice Returns the redeem request for a given user
+    function redeemRequests(address user) external view returns (RedeemRequest memory);
+
+    /// @notice Returns the last L1 block number noticed by the vault
+    function lastL1Block() external view returns (uint64);
+
+    /// @notice Returns the current amount of assets that have been deposited during the last L1 block noticed by the vault
+    function currentBlockDeposits() external view returns (uint64);
+
+    /// @notice Returns the last time fees were collected from the vault and shares were minted to the feeRecipient
+    function lastFeeCollectionTimestamp() external view returns (uint64);
+
 }

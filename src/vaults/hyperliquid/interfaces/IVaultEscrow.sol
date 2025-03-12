@@ -59,4 +59,7 @@ interface IVaultEscrow {
 
     /// @notice Returns the decimals of the asset in perps
     function assetPerpDecimals() external view returns (uint8);
+
+    /// @notice Returns the vault equity that is controlled by the escrow contract
+    function vaultEquity() external view returns (uint256);
 }
