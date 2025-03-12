@@ -34,7 +34,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         uint64 lastL1Block;
         /// @notice The amount of deposits that have been made in the current L1 block
         uint64 currentBlockDeposits;
-        /// @notice The last time the fees were collected
+        /// @notice The last time the fees were accrued
         uint64 lastFeeCollectionTimestamp;
         /// @notice The management fee in basis points
         uint64 managementFeeBps;
@@ -46,6 +46,8 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         mapping(address => RedeemRequest) redeemRequests;
         /// @notice The total amount of underlying assets that are in redemption requests
         uint64 totalRedeemRequests;
+        /// @notice The address of the fee recipient
+        address feeRecipient;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -94,6 +96,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         V1Storage storage $ = _getV1Storage();
 
         $.minDepositAmount = minDeposit_;
+        $.feeRecipient = owner_; // Initial fee recipient is the owner
         _deployEscrows($, escrowCount_, asset_, assetIndex_, assetPerpDecimals_);
 
         // Initialize all parent contracts
@@ -345,7 +348,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         if (feeTake_ > 0) {
             $.lastFeeCollectionTimestamp = uint64(block.timestamp);
             uint256 sharesToMint = _convertToShares(feeTake_, Math.Rounding.Floor);
-            _mint(owner(), sharesToMint);
+            _mint($.feeRecipient, sharesToMint);
         }
         return feeTake_;
     }
@@ -471,6 +474,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         _getV1Storage().minDepositAmount = newMinDepositAmount_;
     }
 
+    /// @notice Sets the fee recipient for the vault
+    function setFeeRecipient(address newFeeRecipient_) external onlyOwner {
+        require(newFeeRecipient_ != address(0), Errors.INVALID_FEE_RECIPIENT());
+        _getV1Storage().feeRecipient = newFeeRecipient_;
+    }
+
     /*//////////////////////////////////////////////////////////////
                             View Functions
     //////////////////////////////////////////////////////////////*/
@@ -536,6 +545,11 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     /// @inheritdoc IHyperEvmVault
     function lastFeeCollectionTimestamp() external view override returns (uint64) {
         return _getV1Storage().lastFeeCollectionTimestamp;
+    }
+
+    /// @inheritdoc IHyperEvmVault
+    function feeRecipient() external view override returns (address) {
+        return _getV1Storage().feeRecipient;
     }
 
     /*//////////////////////////////////////////////////////////////

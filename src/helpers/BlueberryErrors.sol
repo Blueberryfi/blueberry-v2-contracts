@@ -49,4 +49,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when the vault equity is insufficient to withdraw
     error INSUFFICIENT_VAULT_EQUITY();
+
+    /// @notice Error thrown when the fee recipient is invalid
+    error INVALID_FEE_RECIPIENT();
 }

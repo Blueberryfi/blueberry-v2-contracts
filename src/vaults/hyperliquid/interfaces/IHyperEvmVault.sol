@@ -110,4 +110,6 @@ interface IHyperEvmVault is IERC4626 {
     /// @notice Returns the last time fees were collected from the vault and shares were minted to the feeRecipient
     function lastFeeCollectionTimestamp() external view returns (uint64);
 
+    /// @notice Returns the address of the fee recipient
+    function feeRecipient() external view returns (address);
 }
