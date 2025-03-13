@@ -39,12 +39,6 @@ interface IHyperEvmVault is IERC4626 {
      */
     event RedeemRequested(address indexed account, uint256 shares, uint256 assets);
 
-    /**
-     * @notice Emitted when the admin withdraws the accumulated fees from the vault
-     * @param amount The amount of fees withdrawn
-     */
-    event FeesWithdrawn(uint256 amount);
-
     /*//////////////////////////////////////////////////////////////
                             External Functions
     //////////////////////////////////////////////////////////////*/

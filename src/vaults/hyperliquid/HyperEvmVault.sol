@@ -14,6 +14,8 @@ import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.s
 import {VaultEscrow} from "@blueberry-v2/vaults/hyperliquid/VaultEscrow.sol";
 import {IHyperEvmVault} from "@blueberry-v2/vaults/hyperliquid/interfaces/IHyperEvmVault.sol";
 
+import {console} from "forge-std/console.sol";
+
 /**
  * @title HyperEvmVault
  * @author Blueberry
@@ -347,8 +349,10 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         // Only update state if there's a fee to take
         if (feeTake_ > 0) {
             $.lastFeeCollectionTimestamp = uint64(block.timestamp);
-            uint256 sharesToMint = _convertToShares(feeTake_, Math.Rounding.Floor);
+            console.log("feeTake_", feeTake_);
+            uint256 sharesToMint = feeTake_.mulDivDown(totalSupply(), grossAssets - feeTake_);
             _mint($.feeRecipient, sharesToMint);
+            console.log("assets after fee take", _convertToAssets(sharesToMint, Math.Rounding.Floor));
         }
         return feeTake_;
     }
