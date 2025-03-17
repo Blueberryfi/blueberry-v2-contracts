@@ -62,4 +62,12 @@ interface IVaultEscrow {
 
     /// @notice Returns the vault equity that is controlled by the escrow contract
     function vaultEquity() external view returns (uint256);
+
+    /**
+     * @notice Returns the address of the asset system
+     * @dev The system address is used to bridge assets to Hyperliquid L1.
+     *      The system address for an asset is derived by appending `0x20` followed by all 0s,
+     *      and then the asset index encoded in big-endian format.
+     */
+    function assetSystemAddr() external view returns (address);
 }

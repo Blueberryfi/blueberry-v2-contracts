@@ -33,7 +33,7 @@ contract VaultUnitTest is Test {
 
     address public constant VAULT_EQUITY_PRECOMPILE_ADDRESS = 0x0000000000000000000000000000000000000802;
     address public constant WRITE_PRECOMPILE_ADDRESS = 0x3333333333333333333333333333333333333333;
-    address public constant HYPERLIQUID_SPOT_BRIDGE = 0x2222222222222222222222222222222222222222;
+    address public constant USDC_SYSTEM_ADDRESS = 0x2000000000000000000000000000000000000000;
 
     function setUp() public {
         // Set up precompiles
@@ -83,7 +83,7 @@ contract VaultUnitTest is Test {
 
         assertEq(asset.balanceOf(address(escrow)), 0);
         assertEq(asset.balanceOf(address(wrapper)), 0);
-        assertEq(asset.balanceOf(HYPERLIQUID_SPOT_BRIDGE), amount);
+        assertEq(asset.balanceOf(USDC_SYSTEM_ADDRESS), amount);
     }
 
     function test_mint() public {
@@ -111,7 +111,7 @@ contract VaultUnitTest is Test {
 
         assertEq(asset.balanceOf(address(escrow)), 0);
         assertEq(asset.balanceOf(address(wrapper)), 0);
-        assertEq(asset.balanceOf(HYPERLIQUID_SPOT_BRIDGE), amount * 2);
+        assertEq(asset.balanceOf(0x2000000000000000000000000000000000000000), amount * 2);
     }
 
     function deposit_multiBlock() public {
@@ -226,8 +226,8 @@ contract VaultUnitTest is Test {
         assertEq(bobRequest.assets, 14776505356);
 
         /// Update escrow and vault state to reflect precompile calls
-        vm.startPrank(HYPERLIQUID_SPOT_BRIDGE);
-        asset.mint(HYPERLIQUID_SPOT_BRIDGE, 97.5e8);
+        vm.startPrank(USDC_SYSTEM_ADDRESS);
+        asset.mint(USDC_SYSTEM_ADDRESS, 97.5e8);
         /// MINT REMAINDER OF TOKENS TO BRIDGE
         asset.transfer(address(escrow), 297.5e8); // 295.5e8
 

@@ -176,6 +176,38 @@ contract VaultSetupUnitTest is Test {
         assertEq(vault.redeemEscrowIndex(), 1);
     }
 
+    function test_AssetSystemAddr() public {
+        /// System address for asset index 0
+        address implementation = address(new HyperEvmVault(l1Vault));
+        vault = HyperEvmVault(
+            address(
+                new ERC1967Proxy(
+                    implementation,
+                    abi.encodeWithSelector(
+                        HyperEvmVault.initialize.selector, "Wrapped HLP", "wHLP", address(asset), 0, 8, 10e8, 7, owner
+                    )
+                )
+            )
+        );
+        VaultEscrow escrow = VaultEscrow(vault.escrows(vault.depositEscrowIndex()));
+        assertEq(escrow.assetSystemAddr(), address(0x2000000000000000000000000000000000000000));
+
+        /// System address for asset index  200
+        implementation = address(new HyperEvmVault(l1Vault));
+        vault = HyperEvmVault(
+            address(
+                new ERC1967Proxy(
+                    implementation,
+                    abi.encodeWithSelector(
+                        HyperEvmVault.initialize.selector, "Wrapped HLP", "wHLP", address(asset), 200, 8, 10e8, 7, owner
+                    )
+                )
+            )
+        );
+        escrow = VaultEscrow(vault.escrows(vault.depositEscrowIndex()));
+        assertEq(escrow.assetSystemAddr(), address(0x20000000000000000000000000000000000000C8));
+    }
+
     function _updateL1BlockNumber(uint64 blockNumber_) internal {
         vm.store(L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS, bytes32(uint256(0)), bytes32(uint256(blockNumber_)));
     }
