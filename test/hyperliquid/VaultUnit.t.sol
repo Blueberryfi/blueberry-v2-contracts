@@ -126,7 +126,7 @@ contract VaultUnitTest is Test {
         _updateL1BlockNumber(2);
         wrapper.deposit(amount, alice);
 
-        assertEq(wrapper.currentBlockDeposits(), amount);
+        assertEq(wrapper.currentL1BlockDeposits(), amount);
         assertEq(wrapper.lastL1Block(), 1);
         assertEq(wrapper.totalAssets(), amount * 2);
         assertEq(wrapper.totalSupply(), amount * 2);

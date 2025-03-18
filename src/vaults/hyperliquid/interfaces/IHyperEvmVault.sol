@@ -98,8 +98,8 @@ interface IHyperEvmVault is IERC4626 {
     /// @notice Returns the last L1 block number noticed by the vault
     function lastL1Block() external view returns (uint64);
 
-    /// @notice Returns the current amount of assets that have been deposited during the last L1 block noticed by the vault
-    function currentBlockDeposits() external view returns (uint64);
+    /// @notice Returns the current amount of assets that have been deposited during the current L1 block
+    function currentL1BlockDeposits() external view returns (uint64);
 
     /// @notice Returns the last time fees were collected from the vault and shares were minted to the feeRecipient
     function lastFeeCollectionTimestamp() external view returns (uint64);

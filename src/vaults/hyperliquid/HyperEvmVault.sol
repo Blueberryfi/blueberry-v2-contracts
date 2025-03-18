@@ -554,7 +554,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     }
 
     /// @inheritdoc IHyperEvmVault
-    function currentBlockDeposits() external view override returns (uint64) {
+    function currentL1BlockDeposits() external view override returns (uint64) {
        return _getV1Storage().lastL1Block == l1Block() ? _getV1Storage().currentBlockDeposits : 0;
     }
 
