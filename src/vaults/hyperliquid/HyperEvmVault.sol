@@ -477,8 +477,11 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     /// @notice Sets the management fee in basis points
     function setManagementFeeBps(uint64 newManagementFeeBps_) external onlyOwner {
         require(newManagementFeeBps_ <= BPS_DENOMINATOR, Errors.FEE_TOO_HIGH());
+        
         V1Storage storage $ = _getV1Storage();
-        _takeFee($, _totalEscrowValue($));
+        if ($.lastFeeCollectionTimestamp != 0) {
+            _takeFee($, _totalEscrowValue($));
+        }
         _getV1Storage().managementFeeBps = newManagementFeeBps_;
     }
 
@@ -552,7 +555,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
     /// @inheritdoc IHyperEvmVault
     function currentBlockDeposits() external view override returns (uint64) {
-        return _getV1Storage().currentBlockDeposits;
+       return _getV1Storage().lastL1Block == l1Block() ? _getV1Storage().currentBlockDeposits : 0;
     }
 
     /// @inheritdoc IHyperEvmVault
