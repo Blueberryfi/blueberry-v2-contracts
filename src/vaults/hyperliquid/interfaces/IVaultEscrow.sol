@@ -16,6 +16,7 @@ interface IVaultEscrow {
     /// @notice A struct returned by Hyperliquid L1 vault equity precompile calls
     struct UserVaultEquity {
         uint64 equity;
+        uint64 lockedUntilTimestamp;
     }
 
     /// @notice A struct representing the state of the escrow in relation to Hyperliquid L1 for withdrawals

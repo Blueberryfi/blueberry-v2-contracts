@@ -52,4 +52,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when the fee recipient is invalid
     error INVALID_FEE_RECIPIENT();
+
+    /// @notice Error thrown when the vault on Hyperliquid L1 is locked and cannot be used for withdrawals
+    error L1_VAULT_LOCKED();
 }

@@ -106,7 +106,8 @@ contract VaultEscrow is IVaultEscrow {
 
     /// @inheritdoc IVaultEscrow
     function withdraw(uint64 assets_) external override onlyVaultWrapper {
-        uint64 vaultEquity_ = uint64(_vaultEquity());
+        (uint64 vaultEquity_, uint64 lockedUntilTimestamp_) = _vaultEquity();
+        require(block.timestamp < lockedUntilTimestamp_, Errors.L1_VAULT_LOCKED());
 
         L1WithdrawState storage l1WithdrawState_ = _l1WithdrawState;
         _updateL1WithdrawState(l1WithdrawState_);
@@ -130,7 +131,8 @@ contract VaultEscrow is IVaultEscrow {
                             Internal Functions
     //////////////////////////////////////////////////////////////*/
 
-    function _vaultEquity() internal view returns (uint256) {
+    /// @dev Returns the vault equity and the locked until timestamp.
+    function _vaultEquity() internal view returns (uint64, uint64) {
         (bool success, bytes memory result) =
             VAULT_EQUITY_PRECOMPILE_ADDRESS.staticcall(abi.encode(address(this), _vault));
         require(success, "VaultEquity precompile call failed");
@@ -141,7 +143,7 @@ contract VaultEscrow is IVaultEscrow {
             ? userVaultEquity.equity / (10 ** (_perpDecimals - _evmSpotDecimals))
             : userVaultEquity.equity * (10 ** (_evmSpotDecimals - _perpDecimals));
 
-        return equityInSpot;
+        return (uint64(equityInSpot), userVaultEquity.lockedUntilTimestamp);
     }
 
     /// @dev Updates the withdraw state of the current L1 block.
@@ -160,12 +162,14 @@ contract VaultEscrow is IVaultEscrow {
     /// @inheritdoc IVaultEscrow
     function tvl() public view returns (uint256) {
         uint256 assetBalance = ERC20Upgradeable(_asset).balanceOf(address(this));
-        return _vaultEquity() + assetBalance;
+        (uint64 vaultEquity_, ) = _vaultEquity();
+        return uint256(vaultEquity_) + assetBalance;
     }
 
     /// @inheritdoc IVaultEscrow
     function vaultEquity() external view returns (uint256) {
-        return _vaultEquity();
+        (uint64 vaultEquity_, ) = _vaultEquity();
+        return uint256(vaultEquity_);
     }
 
     /// @inheritdoc IVaultEscrow
