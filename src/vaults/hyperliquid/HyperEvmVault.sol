@@ -252,28 +252,18 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         }
     }
 
-    /// @notice Overrides the ERC4626 previewWithdraw function to return the amount of shares a user can burn for a given amount of assets
+    /// @notice Overrides the ERC4626 previewWithdraw function to return the amount of shares a user can withdraw for a given amount of assets
     function previewWithdraw(uint256 assets_) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         V1Storage storage $ = _getV1Storage();
         RedeemRequest memory request = $.redeemRequests[msg.sender];
         return assets_.mulDivUp(request.shares, request.assets);
     }
 
-    /// @notice Overrides the ERC4626 previewRedeem function to return the amount of assets a user can withdraw for a given amount of shares
+    /// @notice Overrides the ERC4626 previewRedeem function to return the amount of assets a user can redeem for a given amount of shares
     function previewRedeem(uint256 shares_) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         V1Storage storage $ = _getV1Storage();
         RedeemRequest memory request = $.redeemRequests[msg.sender];
         return shares_.mulDivDown(request.assets, request.shares);
-    }
-
-    /// @notice Overrides the ERC4626 maxWithdraw function to return the maximum amount of assets a user can withdraw
-    function maxWithdraw(address owner) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
-        return _getV1Storage().redeemRequests[owner].assets;
-    }
-
-    /// @notice Overrides the ERC4626 maxRedeem function to return the maximum amount of shares a user can redeem
-    function maxRedeem(address owner) public view virtual override(ERC4626Upgradeable, IERC4626) returns (uint256) {
-        return _getV1Storage().redeemRequests[owner].shares;
     }
 
     /// @notice Overrides the ERC4626 _withdraw function to update the redeem requests & retrieve assets from the
