@@ -132,7 +132,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         } else {
             uint256 tvl_ = _totalEscrowValue($);
             _takeFee($, tvl_);
-            shares = assets.mulDivDown(totalSupply(), tvl_);
+            shares = assets.mulDivUp(totalSupply(), tvl_);
         }
 
         _mint(receiver, shares);
@@ -224,7 +224,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         uint256 tvl_ = _totalEscrowValue($);
         uint256 feeShares = _previewFeeShares($, tvl_);
         uint256 adjustedSupply = totalSupply() + feeShares;
-        return assets_.mulDivDown(adjustedSupply, tvl_);
+        return assets_.mulDivUp(adjustedSupply, tvl_);
     }
 
     /// @notice Overrides the ERC4626 previewMint function to return the amount of assets a user has to deposit for a given amount of shares
