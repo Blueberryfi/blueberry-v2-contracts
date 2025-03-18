@@ -132,7 +132,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         } else {
             uint256 tvl_ = _totalEscrowValue($);
             _takeFee($, tvl_);
-            shares = assets.mulDivUp(totalSupply(), tvl_);
+            shares = assets.mulDivDown(totalSupply(), tvl_);
         }
 
         _mint(receiver, shares);
@@ -159,7 +159,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         } else {
             uint256 tvl_ = _totalEscrowValue($);
             _takeFee($, tvl_);
-            assets = shares.mulDivDown(tvl_, totalSupply()); // We do not cache total supply due to its potential to change during the fee take
+            assets = shares.mulDivUp(tvl_, totalSupply()); // We do not cache total supply due to its potential to change during the fee take
         }
 
         require(assets >= $.minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
@@ -224,7 +224,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         uint256 tvl_ = _totalEscrowValue($);
         uint256 feeShares = _previewFeeShares($, tvl_);
         uint256 adjustedSupply = totalSupply() + feeShares;
-        return assets_.mulDivUp(adjustedSupply, tvl_);
+        return assets_.mulDivDown(adjustedSupply, tvl_);
     }
 
     /// @notice Overrides the ERC4626 previewMint function to return the amount of assets a user has to deposit for a given amount of shares
@@ -463,7 +463,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     }
 
     function _convertToShares(uint256 assets, Math.Rounding /*rounding*/ ) internal view override returns (uint256) {
-        return assets.mulDivDown(totalSupply(), tvl());
+        return assets.mulDivUp(totalSupply(), tvl());
     }
 
     function _convertToAssets(uint256 shares, Math.Rounding /*rounding*/ ) internal view override returns (uint256) {
