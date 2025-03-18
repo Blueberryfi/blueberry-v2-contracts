@@ -18,6 +18,14 @@ interface IVaultEscrow {
         uint64 equity;
     }
 
+    /// @notice A struct representing the state of the escrow in relation to Hyperliquid L1 for withdrawals
+    struct L1WithdrawState {
+        /// @notice The last L1 block number that a withdraw was requested on the escrow
+        uint64 lastWithdrawBlock;
+        /// @notice The total amount of assets that have been requested to be withdrawn during the last withdraw block
+        uint64 lastWithdraws;
+    }
+
     /*//////////////////////////////////////////////////////////////
                             External Functions
     //////////////////////////////////////////////////////////////*/
@@ -70,4 +78,10 @@ interface IVaultEscrow {
      *      and then the asset index encoded in big-endian format.
      */
     function assetSystemAddr() external view returns (address);
+
+    /// @dev Returns the current L1 block number.
+    function l1Block() external view returns (uint64);
+
+    /// @dev Returns the L1WithdrawState struct.
+    function l1WithdrawState() external view returns (L1WithdrawState memory);
 }
