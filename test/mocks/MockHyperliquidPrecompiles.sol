@@ -16,13 +16,14 @@ contract MockL1BlockNumberPrecompile {
 contract MockVaultEquityPrecompile {
     struct UserVaultEquity {
         uint64 equity;
+        uint64 lockedUntilTimestamp;
     }
 
-    mapping(address => uint64) private _userVaultEquity;
+    mapping(address => UserVaultEquity) private _userVaultEquity;
 
     fallback(bytes calldata data) external returns (bytes memory) {
         (address user,) = abi.decode(data, (address, address));
-        return abi.encode(UserVaultEquity({equity: _userVaultEquity[user]}));
+        return abi.encode(UserVaultEquity({equity: _userVaultEquity[user].equity, lockedUntilTimestamp: _userVaultEquity[user].lockedUntilTimestamp}));
     }
 }
 

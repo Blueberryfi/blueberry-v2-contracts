@@ -257,6 +257,46 @@ contract VaultUnitTest is Test {
         assertEq(asset.balanceOf(bob), 14776505356);
     }
 
+    function test_redeem_inefficient() public {
+        uint256 amount = 100e8;
+
+        asset.mint(alice, amount);
+        asset.mint(bob, amount);
+
+        vm.startPrank(alice);
+        asset.approve(address(wrapper), amount);
+        wrapper.deposit(amount, alice);
+
+        uint256 aliceDepositEscrowIndex = wrapper.depositEscrowIndex();
+
+        // Skip 24 hours
+        vm.warp(block.timestamp + 24 hours);
+        _updateL1BlockNumber(2);
+        _updateVaultEquity(wrapper.escrows(aliceDepositEscrowIndex), 100e8);
+
+        vm.startPrank(bob);
+        asset.approve(address(wrapper), amount);
+        wrapper.deposit(amount, bob);
+
+        uint256 bobDepositEscrowIndex = wrapper.depositEscrowIndex();
+        assertNotEq(bobDepositEscrowIndex, aliceDepositEscrowIndex);
+
+        // Skip 24 hours
+        vm.warp(block.timestamp + 5 days);
+        _updateL1BlockNumber(4);
+        _updateVaultEquity(wrapper.escrows(bobDepositEscrowIndex), 100e8);
+
+        assertEq(wrapper.redeemEscrowIndex(), aliceDepositEscrowIndex);
+
+        vm.startPrank(alice);
+        wrapper.requestRedeem(amount);
+
+        // Because the redeem escrow only has 100e8 this redeem request should fail
+        vm.startPrank(bob);
+        vm.expectRevert(BlueberryErrors.INSUFFICIENT_VAULT_EQUITY.selector);
+        wrapper.requestRedeem(amount);
+    }
+
     function _updateL1BlockNumber(uint64 blockNumber_) internal {
         vm.store(L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS, bytes32(uint256(0)), bytes32(uint256(blockNumber_)));
     }
@@ -269,7 +309,7 @@ contract VaultUnitTest is Test {
         uint256 scaledEquity = perpDecimals > assetDecimals
             ? equity_ * 10 ** (perpDecimals - assetDecimals)
             : equity_ / 10 ** (assetDecimals - perpDecimals);
-
-        vm.store(VAULT_EQUITY_PRECOMPILE_ADDRESS, slot, bytes32(uint256(scaledEquity)));
+        uint256 packedData = uint256(scaledEquity) | (block.timestamp + 4 days << 64);
+        vm.store(VAULT_EQUITY_PRECOMPILE_ADDRESS, slot, bytes32(packedData));
     }
 }
