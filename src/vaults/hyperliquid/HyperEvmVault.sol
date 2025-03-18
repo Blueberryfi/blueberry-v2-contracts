@@ -463,7 +463,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     }
 
     function _convertToShares(uint256 assets, Math.Rounding /*rounding*/ ) internal view override returns (uint256) {
-        return assets.mulDivUp(totalSupply(), tvl());
+        return assets.mulDivDown(totalSupply(), tvl());
     }
 
     function _convertToAssets(uint256 shares, Math.Rounding /*rounding*/ ) internal view override returns (uint256) {
