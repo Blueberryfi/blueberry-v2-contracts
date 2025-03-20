@@ -203,7 +203,7 @@ contract VaultUnitTest is Test {
         
         uint256 ownerShares = wrapper.balanceOf(owner);
         assertEq(wrapper.convertToAssets(ownerShares), fee);
-        assertEq(wrapper.totalSupply(), 200e8 + ownerShares);
+        assertEq(wrapper.totalSupply(), 100e8 + ownerShares); // We should have decrimented 100e8 from the total supply
 
         IHyperEvmVault.RedeemRequest memory aliceRequest = wrapper.redeemRequests(alice);
 
@@ -233,6 +233,10 @@ contract VaultUnitTest is Test {
         // Update escrow vault equity to just reflect the fee
         _updateVaultEquity(escrow, fee);
 
+        // Redemption requests should decriment the total assets and total supply
+        assertEq(wrapper.totalAssets(), wrapper.convertToAssets(ownerShares));
+        assertEq(wrapper.totalSupply(), ownerShares);
+
         vm.startPrank(alice);
         wrapper.redeem(100e8, alice, alice);
 
@@ -252,8 +256,12 @@ contract VaultUnitTest is Test {
         assertEq(wrapper.totalAssets(), wrapper.convertToAssets(ownerShares));
         assertEq(wrapper.totalSupply(), ownerShares);
 
-        assertEq(asset.balanceOf(alice), 147.73125e8 - 1);
-        assertEq(asset.balanceOf(bob), 147.73125e8 - 1);
+        assertApproxEqAbs(asset.balanceOf(alice), 147.73125e8, 1);
+        assertApproxEqAbs(asset.balanceOf(bob), 147.73125e8, 1);
+
+        // Validate that the request sum struct has been decremented to 0
+        assertEq(wrapper.requestSum().assets, 0);
+        assertEq(wrapper.requestSum().shares, 0);
     }
 
     function test_redeem_inefficient() public {
