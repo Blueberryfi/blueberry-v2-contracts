@@ -256,14 +256,14 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         internal
         override
     {
-        _beforeWithdraw(assets_, shares_);
+        _beforeWithdraw(owner, assets_, shares_);
         super._withdraw(caller, receiver, owner, assets_, shares_);
     }
 
     /// @notice Updates the redeem requests & retrieves assets from the escrow contracts
-    function _beforeWithdraw(uint256 assets_, uint256 shares_) internal {
+    function _beforeWithdraw(address owner, uint256 assets_, uint256 shares_) internal {
         V1Storage storage $ = _getV1Storage();
-        RedeemRequest storage request = $.redeemRequests[msg.sender];
+        RedeemRequest storage request = $.redeemRequests[owner];
         require(request.assets >= assets_, Errors.WITHDRAW_TOO_LARGE());
         require(request.shares >= shares_, Errors.WITHDRAW_TOO_LARGE());
 
