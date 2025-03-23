@@ -46,9 +46,6 @@ contract VaultEscrow is IVaultEscrow {
     /// @notice The address of the vault equity precompile, used for querying native L1 vault information & state.
     address public constant VAULT_EQUITY_PRECOMPILE_ADDRESS = 0x0000000000000000000000000000000000000802;
 
-    /// @notice The address of the hyperliquid spot bridge, used for sending tokens to L1.
-    address public constant HYPERLIQUID_SPOT_BRIDGE = 0x2222222222222222222222222222222222222222;
-
     /// @notice The address of the write precompile, used for sending transactions to the L1.
     IL1Write public constant L1_WRITE_PRECOMPILE = IL1Write(0x3333333333333333333333333333333333333333);
 
@@ -80,12 +77,12 @@ contract VaultEscrow is IVaultEscrow {
     }
 
     /*//////////////////////////////////////////////////////////////
-                                External Functions
+                            External Functions
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IVaultEscrow
     function deposit(uint64 amount) external onlyVaultWrapper {
-        ERC20Upgradeable(_asset).safeTransfer(HYPERLIQUID_SPOT_BRIDGE, amount);
+        ERC20Upgradeable(_asset).safeTransfer(assetSystemAddr(), amount);
 
         uint256 amountPerp = (_perpDecimals > _evmSpotDecimals)
             ? amount * (10 ** (_perpDecimals - _evmSpotDecimals))
@@ -110,7 +107,7 @@ contract VaultEscrow is IVaultEscrow {
         // Transfer assets to L1 spot
         L1_WRITE_PRECOMPILE.sendUsdClassTransfer(uint64(amountPerp), false);
         // Bridges assets back to escrow's EVM account
-        L1_WRITE_PRECOMPILE.sendSpot(HYPERLIQUID_SPOT_BRIDGE, _assetIndex, assets_);
+        L1_WRITE_PRECOMPILE.sendSpot(assetSystemAddr(), _assetIndex, assets_);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -174,5 +171,11 @@ contract VaultEscrow is IVaultEscrow {
     /// @inheritdoc IVaultEscrow
     function assetPerpDecimals() external view returns (uint8) {
         return _perpDecimals;
+    }
+
+    /// @inheritdoc IVaultEscrow
+    function assetSystemAddr() public view override returns (address) {
+        uint160 base = uint160(0x2000000000000000000000000000000000000000);
+        return address(base | uint160(_assetIndex));
     }
 }
