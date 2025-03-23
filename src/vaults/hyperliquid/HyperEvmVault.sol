@@ -159,7 +159,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         } else {
             uint256 tvl_ = _totalEscrowValue($);
             _takeFee($, tvl_);
-            assets = shares.mulDivDown(tvl_, totalSupply()); // We do not cache total supply due to its potential to change during the fee take
+            assets = shares.mulDivUp(tvl_, totalSupply()); // We do not cache total supply due to its potential to change during the fee take
         }
 
         require(assets >= $.minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
