@@ -55,4 +55,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when the vault on Hyperliquid L1 is locked and cannot be used for withdrawals
     error L1_VAULT_LOCKED();
+
+    /// @notice Error thrown when 0 shares are minted from a vault deposit
+    error ZERO_SHARES();
 }
