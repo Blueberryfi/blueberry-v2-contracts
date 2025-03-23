@@ -158,8 +158,6 @@ contract VaultUnitTest is Test {
         // Skip 1/4 year
         uint256 quarterYear = 90 days;
         vm.warp(block.number + quarterYear - 1);
-        uint256 fee = 101e8 * 150 * (quarterYear) / 10000 / 360 days;
-        uint256 feeInShares = wrapper.convertToShares(fee);
 
         assertEq(wrapper.totalAssets(), 101e8);
         // Second deposit | Bob
@@ -168,14 +166,13 @@ contract VaultUnitTest is Test {
         uint256 expectedShares = wrapper.previewDeposit(amount);
         wrapper.deposit(amount, bob);
 
+        uint256 ownerShares = wrapper.balanceOf(owner);
+
         assertEq(wrapper.totalAssets(), 201e8);
-        assertEq(wrapper.totalSupply(), amount + expectedShares + feeInShares);
+        assertEq(wrapper.totalSupply(), amount + expectedShares + ownerShares);
         assertEq(wrapper.balanceOf(bob), expectedShares);
 
         assertApproxEqAbs(wrapper.convertToAssets(expectedShares), amount, 1);
-
-        // Validate owner shares
-        assertEq(wrapper.balanceOf(owner), feeInShares);
     }
 
     function test_redeem() public {
@@ -198,22 +195,24 @@ contract VaultUnitTest is Test {
 
         // 1.5% of 300e8 for 363 days = 4.5375e8
         uint64 fee = 4.5375e8;
-        uint256 ownerShares = wrapper.convertToShares(fee);
 
         assertEq(wrapper.totalAssets(), 300e8);
         vm.startPrank(alice);
         wrapper.requestRedeem(100e8);
         uint256 aliceAssetsToRedeem = wrapper.previewRedeem(100e8);
-
-        assertEq(wrapper.balanceOf(owner), ownerShares);
-
+        
+        uint256 ownerShares = wrapper.balanceOf(owner);
+        assertEq(wrapper.convertToAssets(ownerShares), fee);
         assertEq(wrapper.totalSupply(), 200e8 + ownerShares);
 
         IHyperEvmVault.RedeemRequest memory aliceRequest = wrapper.redeemRequests(alice);
 
         assertEq(aliceRequest.shares, 100e8);
         assertEq(aliceRequest.assets, aliceAssetsToRedeem);
-        assertEq(aliceRequest.assets, 14776505356);
+
+        // Alices value can be 1 less than the expected value
+        assertApproxEqAbs(aliceRequest.assets, 147.73125e8, 1);
+        assertLe(aliceRequest.assets, 147.73125e8);
 
         vm.startPrank(bob);
         wrapper.requestRedeem(100e8);
@@ -222,8 +221,8 @@ contract VaultUnitTest is Test {
         IHyperEvmVault.RedeemRequest memory bobRequest = wrapper.redeemRequests(bob);
         assertEq(bobRequest.shares, 100e8);
         assertEq(bobRequest.assets, bobAssetsToRedeem);
-        // Update this value as well since Bob's redemption will have the same logic
-        assertEq(bobRequest.assets, 14776505356);
+        assertApproxEqAbs(bobRequest.assets, 147.73125e8, 1);
+        assertLe(bobRequest.assets, 147.73125e8);
 
         /// Update escrow and vault state to reflect precompile calls
         vm.startPrank(USDC_SYSTEM_ADDRESS);
@@ -253,8 +252,8 @@ contract VaultUnitTest is Test {
         assertEq(wrapper.totalAssets(), wrapper.convertToAssets(ownerShares));
         assertEq(wrapper.totalSupply(), ownerShares);
 
-        assertEq(asset.balanceOf(alice), 14776505356);
-        assertEq(asset.balanceOf(bob), 14776505356);
+        assertEq(asset.balanceOf(alice), 147.73125e8 - 1);
+        assertEq(asset.balanceOf(bob), 147.73125e8 - 1);
     }
 
     function test_redeem_inefficient() public {

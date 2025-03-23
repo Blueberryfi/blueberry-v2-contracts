@@ -345,25 +345,23 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
      */
     function _previewFeeShares(V1Storage storage $, uint256 tvl_) internal view returns (uint256) {
         uint256 expectedFee = _calculateFee($, tvl_);
-        return _convertToShares(expectedFee, Math.Rounding.Floor);
+        return expectedFee.mulDivUp(totalSupply(), tvl_ - expectedFee);
     }
 
     /**
      * @notice Takes the management fee from the vault
      * @dev There is a 0.015% annual management fee on the vault's total assets.
      * @param grossAssets The total value of the vault
-     * @return The amount of fees to take in underlying assets
      */
-    function _takeFee(V1Storage storage $, uint256 grossAssets) private returns (uint256) {
-        uint256 feeTake_ = _calculateFee($, grossAssets);
-
-        // Only update state if there's a fee to take
-        if (feeTake_ > 0) {
-            $.lastFeeCollectionTimestamp = uint64(block.timestamp);
-            uint256 sharesToMint = feeTake_.mulDivDown(totalSupply(), grossAssets);
+    function _takeFee(V1Storage storage $, uint256 grossAssets) private {
+        uint256 sharesToMint = _previewFeeShares($, grossAssets);
+    
+        // Even if 0 fees are collected we should still mark as the last collection time to avoid future overcharging
+        $.lastFeeCollectionTimestamp = uint64(block.timestamp);
+    
+        if (sharesToMint > 0) {
             _mint($.feeRecipient, sharesToMint);
         }
-        return feeTake_;
     }
 
     /**
