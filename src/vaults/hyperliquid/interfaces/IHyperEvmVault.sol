@@ -22,6 +22,16 @@ interface IHyperEvmVault is IERC4626 {
         uint256 shares;
     }
 
+    /**
+     * @notice A struct that contains the sum of all the assets and shares that are currently being requested to redeem
+     * @param assets The sum of all the assets that are currently being requested to redeem
+     * @param shares The sum of all the shares that are currently being requested to redeem
+     */
+    struct RequestSum {
+        uint64 assets;
+        uint256 shares;
+    }
+
     /*//////////////////////////////////////////////////////////////
                                 Events
     //////////////////////////////////////////////////////////////*/
@@ -94,6 +104,9 @@ interface IHyperEvmVault is IERC4626 {
 
     /// @notice Returns the redeem request for a given user
     function redeemRequests(address user) external view returns (RedeemRequest memory);
+
+    /// @notice Returns the sum of all the assets and shares that are currently being requested to redeem
+    function requestSum() external view returns (RequestSum memory);
 
     /// @notice Returns the last L1 block number noticed by the vault
     function lastL1Block() external view returns (uint64);

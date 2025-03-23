@@ -47,8 +47,8 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         address[] escrows;
         /// @notice A mapping of user addresses to their redeem requests
         mapping(address => RedeemRequest) redeemRequests;
-        /// @notice The total amount of underlying assets that are in redemption requests
-        uint64 totalRedeemRequests;
+        /// @notice The sum of all the assets and shares that are currently being requested to redeem
+        RequestSum requestSum;
         /// @notice The address of the fee recipient
         address feeRecipient;
     }
@@ -190,7 +190,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         uint256 assetsToRedeem = shares_.mulDivDown(tvl_, totalSupply());
 
         request.assets += uint64(assetsToRedeem);
-        $.totalRedeemRequests += uint64(assetsToRedeem);
+        $.requestSum.assets += uint64(assetsToRedeem);
+        $.requestSum.shares += shares_;
+
         emit RedeemRequested(msg.sender, shares_, assetsToRedeem);
 
         VaultEscrow escrowToRedeem = VaultEscrow($.escrows[redeemEscrowIndex()]);
@@ -217,6 +219,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     /// @notice Overrides the ERC4626 totalAssets function to return the TVL of the vault
     function totalAssets() public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         return tvl();
+    }
+
+    /// @notice Overrides the ERC4626 totalSupply function to return the total supply of the vault minus the sum of all the shares that are currently being requested to redeem
+    function totalSupply() public view override(ERC20Upgradeable, IERC20) returns (uint256) {
+        V1Storage storage $ = _getV1Storage();
+        return super.totalSupply() - $.requestSum.shares;
     }
 
     /// @notice Overrides the ERC4626 previewDeposit function to return the amount of shares a user can deposit
@@ -296,7 +304,8 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
         request.assets -= uint64(assets_);
         request.shares -= shares_;
-        $.totalRedeemRequests -= uint64(assets_);
+        $.requestSum.assets -= uint64(assets_);
+        $.requestSum.shares -= shares_;
 
         _fetchAssets(assets_);
     }
@@ -338,7 +347,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
             assets_ += $.currentBlockDeposits;
         }
 
-        return assets_;
+        return assets_ - $.requestSum.assets;
     }
 
     /**
@@ -357,7 +366,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
         // We subtract the pending redemption requests from the total asset value to avoid taking more fees than needed from
         //    users who do not have any pending redemption requests
-        uint256 eligibleForFeeTake = grossAssets - $.totalRedeemRequests;
+        uint256 eligibleForFeeTake = grossAssets - $.requestSum.assets;
         // Calculate the pro-rated management fee based on time elapsed
         feeAmount_ = eligibleForFeeTake * $.managementFeeBps * timeElapsed / BPS_DENOMINATOR / ONE_YEAR;
 
@@ -573,6 +582,11 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     /// @inheritdoc IHyperEvmVault
     function redeemRequests(address user) external view override returns (RedeemRequest memory) {
         return _getV1Storage().redeemRequests[user];
+    }
+
+    /// @inheritdoc IHyperEvmVault
+    function requestSum() external view override returns (RequestSum memory) {
+        return _getV1Storage().requestSum;
     }
 
     /// @inheritdoc IHyperEvmVault
