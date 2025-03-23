@@ -237,8 +237,16 @@ contract VaultUnitTest is Test {
         vm.startPrank(alice);
         wrapper.redeem(100e8, alice, alice);
 
+        // Validate redeemRequest is cleared
+        assertEq(wrapper.redeemRequests(alice).shares, 0);
+        assertEq(wrapper.redeemRequests(alice).assets, 0);
+
         vm.startPrank(bob);
         wrapper.redeem(100e8, bob, bob);
+
+        // Validate redeemRequest is cleared
+        assertEq(wrapper.redeemRequests(bob).shares, 0);
+        assertEq(wrapper.redeemRequests(bob).assets, 0);
 
         assertEq(wrapper.balanceOf(alice), 0);
         assertEq(wrapper.balanceOf(bob), 0);

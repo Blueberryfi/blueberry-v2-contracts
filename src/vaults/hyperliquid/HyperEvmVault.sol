@@ -2,7 +2,10 @@
 pragma solidity 0.8.28;
 
 import {Ownable2StepUpgradeable} from "@openzeppelin-contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
-import {ERC4626Upgradeable, IERC4626} from "@openzeppelin-contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
+import {
+    ERC4626Upgradeable,
+    IERC4626
+} from "@openzeppelin-contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import {ERC20Upgradeable, IERC20} from "@openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -113,7 +116,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Overrides the ERC4626 deposit function to add custom fee logic + routing deposits to the correct escrow contract
-    function deposit(uint256 assets, address receiver) public override(ERC4626Upgradeable, IERC4626) nonReentrant returns (uint256 shares) {
+    function deposit(uint256 assets, address receiver)
+        public
+        override(ERC4626Upgradeable, IERC4626)
+        nonReentrant
+        returns (uint256 shares)
+    {
         V1Storage storage $ = _getV1Storage();
         require(assets >= $.minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
 
@@ -136,7 +144,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     }
 
     /// @notice Overrides the ERC4626 mint function to add custom fee logic + routing deposits to the correct escrow contract
-    function mint(uint256 shares, address receiver) public override(ERC4626Upgradeable, IERC4626) nonReentrant returns (uint256 assets) {
+    function mint(uint256 shares, address receiver)
+        public
+        override(ERC4626Upgradeable, IERC4626)
+        nonReentrant
+        returns (uint256 assets)
+    {
         V1Storage storage $ = _getV1Storage();
 
         if (totalSupply() == 0) {
@@ -250,7 +263,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     /// @notice Updates the redeem requests & retrieves assets from the escrow contracts
     function _beforeWithdraw(uint256 assets_, uint256 shares_) internal {
         V1Storage storage $ = _getV1Storage();
-        RedeemRequest memory request = $.redeemRequests[msg.sender];
+        RedeemRequest storage request = $.redeemRequests[msg.sender];
         require(request.assets >= assets_, Errors.WITHDRAW_TOO_LARGE());
         require(request.shares >= shares_, Errors.WITHDRAW_TOO_LARGE());
 
@@ -347,7 +360,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         // Only update state if there's a fee to take
         if (feeTake_ > 0) {
             $.lastFeeCollectionTimestamp = uint64(block.timestamp);
-            uint256 sharesToMint = _convertToShares(feeTake_, Math.Rounding.Floor);
+            uint256 sharesToMint = feeTake_.mulDivDown(totalSupply(), grossAssets);
             _mint($.feeRecipient, sharesToMint);
         }
         return feeTake_;
