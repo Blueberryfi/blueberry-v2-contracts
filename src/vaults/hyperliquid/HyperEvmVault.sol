@@ -221,19 +221,35 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     /// @notice Overrides the ERC4626 previewDeposit function to return the amount of shares a user can deposit
     function previewDeposit(uint256 assets_) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         V1Storage storage $ = _getV1Storage();
-        uint256 tvl_ = _totalEscrowValue($);
-        uint256 feeShares = _previewFeeShares($, tvl_);
-        uint256 adjustedSupply = totalSupply() + feeShares;
-        return assets_.mulDivDown(adjustedSupply, tvl_);
+        if (assets_ < $.minDepositAmount) {
+            return 0;
+        }
+
+        uint256 totalSupply_ = totalSupply();
+        if (totalSupply_ == 0) {
+            return assets_;
+        } else {
+            uint256 tvl_ = _totalEscrowValue($);
+            uint256 feeShares = _previewFeeShares($, tvl_);
+            uint256 adjustedSupply = totalSupply_ + feeShares;
+            return assets_.mulDivDown(adjustedSupply, tvl_);
+        }
     }
 
     /// @notice Overrides the ERC4626 previewMint function to return the amount of assets a user has to deposit for a given amount of shares
     function previewMint(uint256 shares_) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         V1Storage storage $ = _getV1Storage();
-        uint256 tvl_ = _totalEscrowValue($);
-        uint256 feeShares = _previewFeeShares($, tvl_);
-        uint256 adjustedSupply = totalSupply() + feeShares;
-        return shares_.mulDivDown(tvl_, adjustedSupply);
+
+        uint256 totalSupply_ = totalSupply();
+        if (totalSupply_ == 0) {
+            return shares_;
+        } else {
+            uint256 tvl_ = _totalEscrowValue($);
+            uint256 feeShares = _previewFeeShares($, tvl_);
+            uint256 adjustedSupply = totalSupply() + feeShares;
+            uint256 assets = shares_.mulDivUp(tvl_, adjustedSupply);
+            return assets >= $.minDepositAmount ? assets : 0;
+        }
     }
 
     /// @notice Overrides the ERC4626 previewWithdraw function to return the amount of shares a user can withdraw for a given amount of assets
