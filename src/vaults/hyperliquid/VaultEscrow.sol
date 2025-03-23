@@ -22,6 +22,13 @@ contract VaultEscrow is IVaultEscrow {
     using SafeERC20 for ERC20Upgradeable;
 
     /*//////////////////////////////////////////////////////////////
+                                Storage
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice The withdraw state of the escrow.
+    L1WithdrawState private _l1WithdrawState;
+
+    /*//////////////////////////////////////////////////////////////
                         Constants & Immutables
     //////////////////////////////////////////////////////////////*/
 
@@ -45,6 +52,9 @@ contract VaultEscrow is IVaultEscrow {
 
     /// @notice The address of the vault equity precompile, used for querying native L1 vault information & state.
     address public constant VAULT_EQUITY_PRECOMPILE_ADDRESS = 0x0000000000000000000000000000000000000802;
+
+    /// @notice The address of the L1 block number precompile, used for querying the L1 block number.
+    address public constant L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS = 0x0000000000000000000000000000000000000809;
 
     /// @notice The address of the write precompile, used for sending transactions to the L1.
     IL1Write public constant L1_WRITE_PRECOMPILE = IL1Write(0x3333333333333333333333333333333333333333);
@@ -84,9 +94,7 @@ contract VaultEscrow is IVaultEscrow {
     function deposit(uint64 amount) external onlyVaultWrapper {
         ERC20Upgradeable(_asset).safeTransfer(assetSystemAddr(), amount);
 
-        uint256 amountPerp = (_perpDecimals > _evmSpotDecimals)
-            ? amount * (10 ** (_perpDecimals - _evmSpotDecimals))
-            : amount / (10 ** (_evmSpotDecimals - _perpDecimals));
+        uint256 amountPerp = _scaleToPerpDecimals(amount);
 
         // Transfer assets to L1 perps
         L1_WRITE_PRECOMPILE.sendUsdClassTransfer(uint64(amountPerp), true);
@@ -96,12 +104,48 @@ contract VaultEscrow is IVaultEscrow {
 
     /// @inheritdoc IVaultEscrow
     function withdraw(uint64 assets_) external override onlyVaultWrapper {
-        require(assets_ <= _vaultEquity(), Errors.INSUFFICIENT_VAULT_EQUITY());
+        (uint64 vaultEquity_, uint64 lockedUntilTimestamp_) = _vaultEquity();
+        require(block.timestamp > lockedUntilTimestamp_, Errors.L1_VAULT_LOCKED());
 
-        uint256 amountPerp = (_perpDecimals > _evmSpotDecimals)
-            ? assets_ * (10 ** (_perpDecimals - _evmSpotDecimals))
-            : assets_ / (10 ** (_evmSpotDecimals - _perpDecimals));
+        // Update the withdraw state for the current L1 block
+        L1WithdrawState storage l1WithdrawState_ = _l1WithdrawState;
+        _updateL1WithdrawState(l1WithdrawState_);
+        l1WithdrawState_.lastWithdraws += assets_;
 
+        // Ensure we havent exceeded requests for the current L1 block
+        require(vaultEquity_ >= l1WithdrawState_.lastWithdraws, Errors.INSUFFICIENT_VAULT_EQUITY());
+
+        // Withdraw from L1 vault
+        _withdrawFromL1Vault(assets_);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            Internal Functions
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev Returns the vault equity and the locked until timestamp.
+    function _vaultEquity() internal view returns (uint64, uint64) {
+        (bool success, bytes memory result) =
+            VAULT_EQUITY_PRECOMPILE_ADDRESS.staticcall(abi.encode(address(this), _vault));
+        require(success, "VaultEquity precompile call failed");
+
+        UserVaultEquity memory userVaultEquity = abi.decode(result, (UserVaultEquity));
+        uint256 equityInSpot = _scaleToSpotDecimals(userVaultEquity.equity);
+
+        return (uint64(equityInSpot), userVaultEquity.lockedUntilTimestamp);
+    }
+
+    /// @dev Updates the withdraw state of the current L1 block.
+    function _updateL1WithdrawState(L1WithdrawState storage l1WithdrawState_) internal {
+        uint64 currentL1Block = l1Block();
+        if (currentL1Block > l1WithdrawState_.lastWithdrawBlock) {
+            l1WithdrawState_.lastWithdrawBlock = currentL1Block;
+            l1WithdrawState_.lastWithdraws = 0;
+        }
+    }
+
+    function _withdrawFromL1Vault(uint64 assets_) internal {
+        uint256 amountPerp = _scaleToPerpDecimals(assets_);
         // Withdraws assets from L1 vault
         L1_WRITE_PRECOMPILE.sendVaultTransfer(_vault, false, uint64(amountPerp));
         // Transfer assets to L1 spot
@@ -110,22 +154,26 @@ contract VaultEscrow is IVaultEscrow {
         L1_WRITE_PRECOMPILE.sendSpot(assetSystemAddr(), _assetIndex, assets_);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                            Internal Functions
-    //////////////////////////////////////////////////////////////*/
+    /**
+     * @notice Scales an amount from spot/evm decimals to perp decimals.
+     * @param amount_ The amount to scale.
+     * @return The amount scaled to perp decimals.
+     */
+    function _scaleToPerpDecimals(uint256 amount_) internal view returns (uint256) {
+        return (_perpDecimals > _evmSpotDecimals)
+            ? amount_ * (10 ** (_perpDecimals - _evmSpotDecimals))
+            : amount_ / (10 ** (_evmSpotDecimals - _perpDecimals));
+    }
 
-    function _vaultEquity() internal view returns (uint256) {
-        (bool success, bytes memory result) =
-            VAULT_EQUITY_PRECOMPILE_ADDRESS.staticcall(abi.encode(address(this), _vault));
-        require(success, "VaultEquity precompile call failed");
-
-        UserVaultEquity memory userVaultEquity = abi.decode(result, (UserVaultEquity));
-
-        uint256 equityInSpot = (_perpDecimals > _evmSpotDecimals)
-            ? userVaultEquity.equity / (10 ** (_perpDecimals - _evmSpotDecimals))
-            : userVaultEquity.equity * (10 ** (_evmSpotDecimals - _perpDecimals));
-
-        return equityInSpot;
+    /**
+     * @notice Scales an amount from perp decimals to spot/evm decimals.
+     * @param amount_ The amount to scale.
+     * @return The amount scaled to spot/evm decimals.
+     */
+    function _scaleToSpotDecimals(uint256 amount_) internal view returns (uint256) {
+        return (_perpDecimals > _evmSpotDecimals)
+            ? amount_ / (10 ** (_perpDecimals - _evmSpotDecimals))
+            : amount_ * (10 ** (_evmSpotDecimals - _perpDecimals));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -135,12 +183,14 @@ contract VaultEscrow is IVaultEscrow {
     /// @inheritdoc IVaultEscrow
     function tvl() public view returns (uint256) {
         uint256 assetBalance = ERC20Upgradeable(_asset).balanceOf(address(this));
-        return _vaultEquity() + assetBalance;
+        (uint64 vaultEquity_, ) = _vaultEquity();
+        return uint256(vaultEquity_) + assetBalance;
     }
 
     /// @inheritdoc IVaultEscrow
     function vaultEquity() external view returns (uint256) {
-        return _vaultEquity();
+        (uint64 vaultEquity_, ) = _vaultEquity();
+        return uint256(vaultEquity_);
     }
 
     /// @inheritdoc IVaultEscrow
@@ -177,5 +227,17 @@ contract VaultEscrow is IVaultEscrow {
     function assetSystemAddr() public view override returns (address) {
         uint160 base = uint160(0x2000000000000000000000000000000000000000);
         return address(base | uint160(_assetIndex));
+    }
+
+    /// @dev Returns the current L1 block number.
+    function l1Block() public view returns (uint64) {
+        (bool success, bytes memory data) = L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS.staticcall(abi.encode());
+        require(success, Errors.STATICCALL_FAILED());
+        return abi.decode(data, (uint64));
+    }
+
+    /// @dev Returns the L1WithdrawState struct.
+    function l1WithdrawState() external view returns (L1WithdrawState memory) {
+        return _l1WithdrawState;
     }
 }
