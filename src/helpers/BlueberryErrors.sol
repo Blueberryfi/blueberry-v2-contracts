@@ -61,4 +61,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when there is an invalid amount of escrows deployed
     error INVALID_ESCROW_COUNT();
+
+    /// @notice Error thrown when the escrow is invalid and the assets do not match
+    error INVALID_ESCROW();
 }

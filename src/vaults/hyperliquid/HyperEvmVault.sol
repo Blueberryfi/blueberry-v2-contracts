@@ -435,7 +435,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         internal
     {
         for (uint256 i = 0; i < escrowCount_; ++i) {
-            VaultEscrow(escrows_[i]).asset() == asset_;
+            require(VaultEscrow(escrows_[i]).asset() == asset_, Errors.INVALID_ESCROW());
         }
         $.escrows = escrows_;
     }
