@@ -36,12 +36,6 @@ interface IHyperEvmVault is IERC4626 {
                                 Events
     //////////////////////////////////////////////////////////////*/
     /**
-     * @notice Emitted when a new escrow is deployed
-     * @param escrow The address of the new escrow contract for the vault
-     */
-    event EscrowDeployed(address indexed escrow);
-
-    /**
      * @notice Emitted when a new redeem request is made
      * @param account The address of the account that made the redeem request
      * @param shares The amount of shares the account requested to redeem

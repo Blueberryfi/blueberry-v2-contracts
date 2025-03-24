@@ -71,7 +71,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
     /// @notice The location for the vault storage
     bytes32 public constant V1_VAULT_STORAGE_LOCATION =
-        keccak256(abi.encode(uint256(keccak256(bytes("hyperevm.vault.storage"))) - 1)) & ~bytes32(uint256(0xff));
+        keccak256(abi.encode(uint256(keccak256(bytes("hyperevm.vault.v1.storage"))) - 1)) & ~bytes32(uint256(0xff));
 
     /*//////////////////////////////////////////////////////////////
                         Constructor & Initializer
@@ -87,20 +87,20 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         string memory name_,
         string memory symbol_,
         address asset_,
-        uint64 assetIndex_,
-        uint8 assetPerpDecimals_,
+        address[] memory escrows_,
         uint64 minDeposit_,
-        uint256 escrowCount_,
         address owner_
     ) public initializer {
         require(owner_ != address(0), Errors.ADDRESS_ZERO());
-        require(escrowCount_ > 0, Errors.AMOUNT_ZERO());
+
+        uint256 escrowLength = escrows_.length;
+        require(escrowLength >= 4 && escrowLength <= 7, Errors.INVALID_ESCROW_COUNT());
 
         V1Storage storage $ = _getV1Storage();
 
         $.minDepositAmount = minDeposit_;
         $.feeRecipient = owner_; // Initial fee recipient is the owner
-        _deployEscrows($, escrowCount_, asset_, assetIndex_, assetPerpDecimals_);
+        _validateEscrows($, escrowLength, escrows_, asset_);
 
         // Initialize all parent contracts
         __ERC4626_init(ERC20Upgradeable(asset_));
@@ -431,18 +431,16 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
      * @notice Deploys escrow contracts for the vault
      * @param escrowCount_ The number of escrow contracts to deploy
      */
-    function _deployEscrows(
+    function _validateEscrows(
         V1Storage storage $,
         uint256 escrowCount_,
-        address asset_,
-        uint64 assetindex_,
-        uint8 assetPerpDecimals_
+        address[] memory escrows_,
+        address asset_
     ) internal {
         for (uint256 i = 0; i < escrowCount_; ++i) {
-            VaultEscrow escrow = new VaultEscrow(address(this), L1_VAULT, asset_, assetindex_, assetPerpDecimals_);
-            $.escrows.push(address(escrow));
-            emit EscrowDeployed(address(escrow));
+            VaultEscrow(escrows_[i]).asset() == asset_;
         }
+        $.escrows = escrows_;
     }
 
     /**

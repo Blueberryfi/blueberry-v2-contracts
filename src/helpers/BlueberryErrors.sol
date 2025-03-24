@@ -58,4 +58,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when 0 shares are minted from a vault deposit
     error ZERO_SHARES();
+
+    /// @notice Error thrown when there is an invalid amount of escrows deployed
+    error INVALID_ESCROW_COUNT();
 }

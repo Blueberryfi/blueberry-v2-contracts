@@ -13,8 +13,9 @@ import {
 } from "../mocks/MockHyperliquidPrecompiles.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {HlpHelpers} from "./HlpHelpers.t.sol";
 
-contract VaultUnitTest is Test {
+contract VaultUnitTest is HlpHelpers {
     HyperEvmVault public wrapper;
     MockERC20 public asset;
     address public l1Vault = makeAddr("L1 Vault");
@@ -35,7 +36,7 @@ contract VaultUnitTest is Test {
     address public constant WRITE_PRECOMPILE_ADDRESS = 0x3333333333333333333333333333333333333333;
     address public constant USDC_SYSTEM_ADDRESS = 0x2000000000000000000000000000000000000000;
 
-    function setUp() public {
+    function setUp() public override {
         // Set up precompiles
         l1BlockNumberPrecompile = new MockL1BlockNumberPrecompile();
         vm.etch(L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS, address(l1BlockNumberPrecompile).code);
@@ -49,17 +50,7 @@ contract VaultUnitTest is Test {
 
         asset = new MockERC20("USDC", "USDC", 8);
 
-        address implementation = address(new HyperEvmVault(l1Vault));
-        wrapper = HyperEvmVault(
-            address(
-                new ERC1967Proxy(
-                    implementation,
-                    abi.encodeWithSelector(
-                        HyperEvmVault.initialize.selector, "Wrapped HLP", "wHLP", address(asset), 0, 6, 10e8, 7, owner
-                    )
-                )
-            )
-        );
+        wrapper = _deploy(address(asset), 0, l1Vault, owner, 7);
 
         vm.startPrank(owner);
         wrapper.setManagementFeeBps(150); // 1.5%

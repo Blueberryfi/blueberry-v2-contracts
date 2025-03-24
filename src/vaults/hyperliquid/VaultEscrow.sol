@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC20Upgradeable} from "@openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 
@@ -18,15 +19,22 @@ import {IVaultEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/IVaultEs
  *      to have at least 1 more escrow contract than the number of deposit locks enforced on the L1 vault.
  *      For HLP we will have 7 escrow contracts.
  */
-contract VaultEscrow is IVaultEscrow {
+contract VaultEscrow is IVaultEscrow, Initializable {
     using SafeERC20 for ERC20Upgradeable;
 
     /*//////////////////////////////////////////////////////////////
                                 Storage
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The withdraw state of the escrow.
-    L1WithdrawState private _l1WithdrawState;
+    /// @custom:storage-location erc7201:vault.escrow.v1.storage
+    struct V1Storage {
+        /// @notice The withdraw state of the escrow.
+        L1WithdrawState l1WithdrawState;
+    }
+
+    /// @notice The location for the vault escrow storage
+    bytes32 public constant V1_ESCROW_STORAGE_LOCATION =
+        keccak256(abi.encode(uint256(keccak256(bytes("vault.escrow.v1.storage"))) - 1)) & ~bytes32(uint256(0xff));
 
     /*//////////////////////////////////////////////////////////////
                         Constants & Immutables
@@ -68,7 +76,7 @@ contract VaultEscrow is IVaultEscrow {
     }
 
     /*//////////////////////////////////////////////////////////////
-                                Constructor
+                        Constructor & Initializer
     //////////////////////////////////////////////////////////////*/
 
     constructor(address wrapper_, address vault_, address asset_, uint64 assetIndex_, uint8 assetPerpDecimals_) {
@@ -82,8 +90,12 @@ contract VaultEscrow is IVaultEscrow {
         _evmSpotDecimals = ERC20Upgradeable(asset_).decimals();
         _perpDecimals = assetPerpDecimals_;
 
+        _disableInitializers();
+    }
+
+    function initialize() public initializer {
         // Max approve the assets to be spent by the wrapper
-        ERC20Upgradeable(asset_).forceApprove(wrapper_, type(uint256).max);
+        ERC20Upgradeable(_asset).forceApprove(_vaultWrapper, type(uint256).max);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -108,7 +120,7 @@ contract VaultEscrow is IVaultEscrow {
         require(block.timestamp > lockedUntilTimestamp_, Errors.L1_VAULT_LOCKED());
 
         // Update the withdraw state for the current L1 block
-        L1WithdrawState storage l1WithdrawState_ = _l1WithdrawState;
+        L1WithdrawState storage l1WithdrawState_ = _getV1Storage().l1WithdrawState;
         _updateL1WithdrawState(l1WithdrawState_);
         l1WithdrawState_.lastWithdraws += assets_;
 
@@ -238,6 +250,18 @@ contract VaultEscrow is IVaultEscrow {
 
     /// @dev Returns the L1WithdrawState struct.
     function l1WithdrawState() external view returns (L1WithdrawState memory) {
-        return _l1WithdrawState;
+        return _getV1Storage().l1WithdrawState;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            Pure Functions
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Retrieves the order storage
+    function _getV1Storage() private pure returns (V1Storage storage $) {
+        bytes32 slot = V1_ESCROW_STORAGE_LOCATION;
+        assembly {
+            $.slot := slot
+        }
     }
 }
