@@ -195,13 +195,13 @@ contract VaultEscrow is IVaultEscrow, Initializable {
     /// @inheritdoc IVaultEscrow
     function tvl() public view returns (uint256) {
         uint256 assetBalance = ERC20Upgradeable(_asset).balanceOf(address(this));
-        (uint64 vaultEquity_, ) = _vaultEquity();
+        (uint64 vaultEquity_,) = _vaultEquity();
         return uint256(vaultEquity_) + assetBalance;
     }
 
     /// @inheritdoc IVaultEscrow
     function vaultEquity() external view returns (uint256) {
-        (uint64 vaultEquity_, ) = _vaultEquity();
+        (uint64 vaultEquity_,) = _vaultEquity();
         return uint256(vaultEquity_);
     }
 

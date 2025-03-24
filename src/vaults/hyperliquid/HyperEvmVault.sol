@@ -391,10 +391,10 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
      */
     function _takeFee(V1Storage storage $, uint256 grossAssets) private {
         uint256 sharesToMint = _previewFeeShares($, grossAssets);
-    
+
         // Even if 0 fees are collected we should still mark as the last collection time to avoid future overcharging
         $.lastFeeCollectionTimestamp = uint64(block.timestamp);
-    
+
         if (sharesToMint > 0) {
             _mint($.feeRecipient, sharesToMint);
         }
@@ -431,12 +431,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
      * @notice Deploys escrow contracts for the vault
      * @param escrowCount_ The number of escrow contracts to deploy
      */
-    function _validateEscrows(
-        V1Storage storage $,
-        uint256 escrowCount_,
-        address[] memory escrows_,
-        address asset_
-    ) internal {
+    function _validateEscrows(V1Storage storage $, uint256 escrowCount_, address[] memory escrows_, address asset_)
+        internal
+    {
         for (uint256 i = 0; i < escrowCount_; ++i) {
             VaultEscrow(escrows_[i]).asset() == asset_;
         }
@@ -511,7 +508,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     /// @notice Sets the management fee in basis points
     function setManagementFeeBps(uint64 newManagementFeeBps_) external onlyOwner {
         require(newManagementFeeBps_ <= BPS_DENOMINATOR, Errors.FEE_TOO_HIGH());
-        
+
         V1Storage storage $ = _getV1Storage();
         if ($.lastFeeCollectionTimestamp != 0) {
             _takeFee($, _totalEscrowValue($));
@@ -594,7 +591,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
     /// @inheritdoc IHyperEvmVault
     function currentL1BlockDeposits() external view override returns (uint64) {
-       return _getV1Storage().lastL1Block == l1Block() ? _getV1Storage().currentBlockDeposits : 0;
+        return _getV1Storage().lastL1Block == l1Block() ? _getV1Storage().currentBlockDeposits : 0;
     }
 
     /// @inheritdoc IHyperEvmVault

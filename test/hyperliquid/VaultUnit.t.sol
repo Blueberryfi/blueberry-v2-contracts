@@ -191,7 +191,7 @@ contract VaultUnitTest is HlpHelpers {
         vm.startPrank(alice);
         wrapper.requestRedeem(100e8);
         uint256 aliceAssetsToRedeem = wrapper.previewRedeem(100e8);
-        
+
         uint256 ownerShares = wrapper.balanceOf(owner);
         assertEq(wrapper.convertToAssets(ownerShares), fee);
         assertEq(wrapper.totalSupply(), 100e8 + ownerShares); // We should have decrimented 100e8 from the total supply

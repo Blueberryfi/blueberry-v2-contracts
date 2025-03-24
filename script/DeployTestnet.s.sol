@@ -32,13 +32,15 @@ contract DeployTestnet is Script {
         address expectedWrapperAddr = LibRLP.computeAddress(deployer, vm.getNonce(deployer) + 3 + escrowCounts);
 
         // 1(b). Deploy Escrow Implementation Contract
-        address escrowImplementation = address(new VaultEscrow(
-            expectedWrapperAddr, // vault wrapper address
-            L1_VAULT, // L1 Vault
-            ASSET, // Asset
-            0, // Asset Index
-            6// Asset Perp Decimals
-        ));
+        address escrowImplementation = address(
+            new VaultEscrow(
+                expectedWrapperAddr, // vault wrapper address
+                L1_VAULT, // L1 Vault
+                ASSET, // Asset
+                0, // Asset Index
+                6 // Asset Perp Decimals
+            )
+        );
 
         // 1(c). Deploy the Beacon and set the Implementation & Owner
         UpgradeableBeacon beacon = new UpgradeableBeacon(escrowImplementation, OWNER);
@@ -46,7 +48,8 @@ contract DeployTestnet is Script {
 
         // 1(d). Deploy all escrow proxies
         for (uint256 i = 0; i < escrowCounts; i++) {
-            address escrowProxy = address(new BeaconProxy(address(beacon), abi.encodeWithSelector(VaultEscrow.initialize.selector, i)));
+            address escrowProxy =
+                address(new BeaconProxy(address(beacon), abi.encodeWithSelector(VaultEscrow.initialize.selector, i)));
             escrows.push(escrowProxy);
         }
 

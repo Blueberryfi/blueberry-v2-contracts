@@ -23,7 +23,12 @@ contract MockVaultEquityPrecompile {
 
     fallback(bytes calldata data) external returns (bytes memory) {
         (address user,) = abi.decode(data, (address, address));
-        return abi.encode(UserVaultEquity({equity: _userVaultEquity[user].equity, lockedUntilTimestamp: _userVaultEquity[user].lockedUntilTimestamp}));
+        return abi.encode(
+            UserVaultEquity({
+                equity: _userVaultEquity[user].equity,
+                lockedUntilTimestamp: _userVaultEquity[user].lockedUntilTimestamp
+            })
+        );
     }
 }
 

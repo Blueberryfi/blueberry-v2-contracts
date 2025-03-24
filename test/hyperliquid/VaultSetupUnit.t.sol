@@ -55,7 +55,6 @@ contract VaultSetupUnitTest is HlpHelpers {
     function test_OwnershipTransfer() public {
         vault = _deploy(address(asset), 0, l1Vault, owner, 7);
 
-
         address newOwner = makeAddr("newOwner");
 
         // Transfer ownership
