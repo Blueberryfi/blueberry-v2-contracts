@@ -94,7 +94,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         require(owner_ != address(0), Errors.ADDRESS_ZERO());
 
         uint256 escrowLength = escrows_.length;
-        require(escrowLength >= 4 && escrowLength <= 7, Errors.INVALID_ESCROW_COUNT());
+        require(escrowLength >= 5 && escrowLength <= 7, Errors.INVALID_ESCROW_COUNT());
 
         V1Storage storage $ = _getV1Storage();
 
