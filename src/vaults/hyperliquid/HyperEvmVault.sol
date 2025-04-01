@@ -209,7 +209,13 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     function maxWithdrawableAssets() public view returns (uint256) {
         V1Storage storage $ = _getV1Storage();
         VaultEscrow escrowToRedeem = VaultEscrow($.escrows[redeemEscrowIndex()]);
-        return escrowToRedeem.vaultEquity();
+        VaultEscrow.L1WithdrawState memory withdrawState = escrowToRedeem.l1WithdrawState();
+
+        uint256 vaultEquity = escrowToRedeem.vaultEquity();
+        if (withdrawState.lastWithdrawBlock == l1Block()) {
+            vaultEquity -= withdrawState.lastWithdraws;
+        }
+        return vaultEquity;
     }
 
     /*//////////////////////////////////////////////////////////////
