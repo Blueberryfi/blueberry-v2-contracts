@@ -30,6 +30,8 @@ contract VaultEscrow is IVaultEscrow, Initializable {
     struct V1Storage {
         /// @notice The withdraw state of the escrow.
         L1WithdrawState l1WithdrawState;
+        /// @notice The internal accounting balance of underlying assets in the vault
+        uint64 assetBalance;
     }
 
     /// @notice The location for the vault escrow storage
@@ -119,16 +121,23 @@ contract VaultEscrow is IVaultEscrow, Initializable {
         (uint64 vaultEquity_, uint64 lockedUntilTimestamp_) = _vaultEquity();
         require(block.timestamp > lockedUntilTimestamp_, Errors.L1_VAULT_LOCKED());
 
-        // Update the withdraw state for the current L1 block
-        L1WithdrawState storage l1WithdrawState_ = _getV1Storage().l1WithdrawState;
-        _updateL1WithdrawState(l1WithdrawState_);
-        l1WithdrawState_.lastWithdraws += assets_;
+        // Update the state for the current L1 block
+        V1Storage storage $ = _getV1Storage();
+        _updateState($);
+        $.l1WithdrawState.lastWithdraws += assets_;
 
         // Ensure we havent exceeded requests for the current L1 block
-        require(vaultEquity_ >= l1WithdrawState_.lastWithdraws, Errors.INSUFFICIENT_VAULT_EQUITY());
+        require(vaultEquity_ >= $.l1WithdrawState.lastWithdraws, Errors.INSUFFICIENT_VAULT_EQUITY());
 
         // Withdraw from L1 vault
         return _withdrawFromL1Vault(assets_);
+    }
+
+    /// @notice Reduces the internal accounting balance of the vault. 
+    function reduceBalance(uint64 assets_) external onlyVaultWrapper {
+        V1Storage storage $ = _getV1Storage();
+        _updateState($);
+        $.assetBalance -= assets_;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -147,12 +156,17 @@ contract VaultEscrow is IVaultEscrow, Initializable {
         return (uint64(equityInSpot), userVaultEquity.lockedUntilTimestamp);
     }
 
-    /// @dev Updates the withdraw state of the current L1 block.
-    function _updateL1WithdrawState(L1WithdrawState storage l1WithdrawState_) internal {
+    /// @dev Updates the state of the last processed L1 block.
+    function _updateState(V1Storage storage $) internal {
         uint64 currentL1Block = l1Block();
-        if (currentL1Block > l1WithdrawState_.lastWithdrawBlock) {
-            l1WithdrawState_.lastWithdrawBlock = currentL1Block;
-            l1WithdrawState_.lastWithdraws = 0;
+
+        if (currentL1Block != $.l1WithdrawState.lastWithdrawBlock) {
+            // Update asset balances with the inflight values of last processed l1 block.
+            $.assetBalance += $.l1WithdrawState.lastWithdraws;
+
+            // Update l1 block cached state
+            $.l1WithdrawState.lastWithdrawBlock = currentL1Block;
+            $.l1WithdrawState.lastWithdraws = 0;
         }
     }
 
@@ -198,9 +212,13 @@ contract VaultEscrow is IVaultEscrow, Initializable {
 
     /// @inheritdoc IVaultEscrow
     function tvl() public view returns (uint256) {
-        uint256 assetBalance = ERC20Upgradeable(_asset).balanceOf(address(this));
+        V1Storage memory $ = _getV1Storage();
         (uint64 vaultEquity_,) = _vaultEquity();
-        return uint256(vaultEquity_) + assetBalance;
+
+        if (l1Block() != $.l1WithdrawState.lastWithdrawBlock) {
+            return vaultEquity_ + $.assetBalance + $.l1WithdrawState.lastWithdraws;
+        }
+        return uint256(vaultEquity_ + $.assetBalance);
     }
 
     /// @inheritdoc IVaultEscrow
@@ -255,6 +273,14 @@ contract VaultEscrow is IVaultEscrow, Initializable {
     /// @dev Returns the L1WithdrawState struct.
     function l1WithdrawState() external view returns (L1WithdrawState memory) {
         return _getV1Storage().l1WithdrawState;
+    }
+
+    function assetBalance() external view returns (uint64) {
+        V1Storage memory $ = _getV1Storage();
+        if (l1Block() != $.l1WithdrawState.lastWithdrawBlock) {
+            return $.assetBalance + $.l1WithdrawState.lastWithdraws;
+        }
+        return $.assetBalance;
     }
 
     /*//////////////////////////////////////////////////////////////
