@@ -192,14 +192,14 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         _takeFee($, tvl_);
         uint256 assetsToRedeem = shares_.mulDivDown(tvl_, totalSupply());
 
+        VaultEscrow escrowToRedeem = VaultEscrow($.escrows[redeemEscrowIndex()]);
+        assetsToRedeem = escrowToRedeem.withdraw(uint64(assetsToRedeem));
+
         request.assets += uint64(assetsToRedeem);
         $.requestSum.assets += uint64(assetsToRedeem);
         $.requestSum.shares += shares_;
 
         emit RedeemRequested(msg.sender, shares_, assetsToRedeem);
-
-        VaultEscrow escrowToRedeem = VaultEscrow($.escrows[redeemEscrowIndex()]);
-        escrowToRedeem.withdraw(uint64(assetsToRedeem));
     }
 
     /// @inheritdoc IHyperEvmVault
