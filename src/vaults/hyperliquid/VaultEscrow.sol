@@ -218,7 +218,7 @@ contract VaultEscrow is IVaultEscrow, Initializable {
         if (l1Block() != $.l1WithdrawState.lastWithdrawBlock) {
             return vaultEquity_ + $.assetBalance + $.l1WithdrawState.lastWithdraws;
         }
-        return uint256(vaultEquity_ + $.assetBalance);
+        return vaultEquity_ + $.assetBalance;
     }
 
     /// @inheritdoc IVaultEscrow
