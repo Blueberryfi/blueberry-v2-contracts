@@ -310,4 +310,86 @@ contract VaultUnitTest is HlpHelpers {
         uint256 packedData = uint256(scaledEquity) | (block.timestamp + 4 days << 64);
         vm.store(VAULT_EQUITY_PRECOMPILE_ADDRESS, slot, bytes32(packedData));
     }
+
+    function test_OnlyOwnerCanWithdraw() public {
+        // prerequisites from `test_redeem`
+        asset.mint(alice, 100e8);
+        asset.mint(bob, 100e8);
+
+        vm.startPrank(alice);
+        asset.approve(address(wrapper), 100e8);
+        wrapper.deposit(100e8, alice);
+
+        vm.startPrank(bob);
+        asset.approve(address(wrapper), 100e8);
+        wrapper.deposit(100e8, bob);
+
+        _updateL1BlockNumber(2);
+        address escrow = wrapper.escrows(wrapper.depositEscrowIndex());
+        // 50% yield 200e8 -> 300e8
+        _updateVaultEquity(escrow, 300e8);
+        vm.warp(block.timestamp + 363 days); // 3 days after 360 days to get to the target redeem escrow
+
+        // 1.5% of 300e8 for 363 days = 4.5375e8
+        uint64 fee = 4.5375e8;
+
+        assertEq(wrapper.totalAssets(), 300e8);
+        vm.startPrank(alice);
+        wrapper.requestRedeem(100e8);
+        uint256 aliceAssetsToRedeem = wrapper.previewRedeem(100e8);
+
+        uint256 ownerShares = wrapper.balanceOf(owner);
+        assertEq(wrapper.convertToAssets(ownerShares), fee);
+        assertEq(wrapper.totalSupply(), 100e8 + ownerShares); // We should have decrimented 100e8 from the total supply
+
+        IHyperEvmVault.RedeemRequest memory aliceRequest = wrapper.redeemRequests(alice);
+
+        assertEq(aliceRequest.shares, 100e8);
+        assertEq(aliceRequest.assets, aliceAssetsToRedeem);
+
+        // Alices value can be 1 less than the expected value
+        assertApproxEqAbs(aliceRequest.assets, 147.73125e8, 1);
+        assertLe(aliceRequest.assets, 147.73125e8);
+
+        vm.startPrank(bob);
+        wrapper.requestRedeem(100e8);
+        uint256 bobAssetsToRedeem = wrapper.previewRedeem(100e8);
+
+        IHyperEvmVault.RedeemRequest memory bobRequest = wrapper.redeemRequests(bob);
+        assertEq(bobRequest.shares, 100e8);
+        assertEq(bobRequest.assets, bobAssetsToRedeem);
+        assertApproxEqAbs(bobRequest.assets, 147.73125e8, 1);
+        assertLe(bobRequest.assets, 147.73125e8);
+
+        /// Update escrow and vault state to reflect precompile calls
+        vm.startPrank(USDC_SYSTEM_ADDRESS);
+        asset.mint(USDC_SYSTEM_ADDRESS, 97.5e8);
+        /// MINT REMAINDER OF TOKENS TO BRIDGE
+        asset.transfer(address(escrow), 297.5e8); // 295.5e8
+
+        // Update escrow vault equity to just reflect the fee
+        _updateVaultEquity(escrow, fee);
+
+        // Redemption requests should decriment the total assets and total supply
+        assertEq(wrapper.totalAssets(), wrapper.convertToAssets(ownerShares));
+        assertEq(wrapper.totalSupply(), ownerShares);
+
+        // prerequisites from `test_redeem`        
+
+        vm.startPrank(alice);
+        wrapper.redeem(100e8 - 1, alice, alice);
+
+        // Validate redeemRequest is cleared
+        assertEq(wrapper.redeemRequests(alice).shares, 1);
+        assertEq(wrapper.redeemRequests(alice).assets, 2);
+        
+        // Bob approve 50e8 shares, i.e. a half of his assets
+        vm.startPrank(bob);
+        wrapper.approve(alice, 50e8);
+
+        // Alice cannot redeem for bob
+        vm.startPrank(alice);
+        vm.expectRevert(BlueberryErrors.OnlyOwnerCanWithdraw.selector);
+        wrapper.redeem(50e8, alice, bob);
+    }
 }
