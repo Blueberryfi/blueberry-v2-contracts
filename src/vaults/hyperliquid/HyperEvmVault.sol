@@ -387,6 +387,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
      */
     function _previewFeeShares(V1Storage storage $, uint256 tvl_) internal view returns (uint256) {
         uint256 expectedFee = _calculateFee($, tvl_);
+        
+        // In the event of multiple factors such as EXTREME vault inactivity & high fees we need to make sure the fee doesnt underflow
+        if (expectedFee >= tvl_) {
+            expectedFee = tvl_ / 2;
+        }
+
         return expectedFee.mulDivUp(totalSupply(), tvl_ - expectedFee);
     }
 
