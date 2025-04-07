@@ -490,11 +490,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
             VaultEscrow escrow = VaultEscrow(cachedEscrows[index]);
 
-            uint256 escrowBalance = ERC20Upgradeable(asset()).balanceOf(address(escrow));
+            uint256 escrowBalance = escrow.assetBalance();
             uint256 transferAmount = Math.min(assets_, escrowBalance);
 
             if (transferAmount > 0) {
                 ERC20Upgradeable(asset()).transferFrom(address(escrow), address(this), transferAmount);
+                escrow.reduceBalance(uint64(transferAmount));
                 assets_ -= transferAmount;
             }
 
