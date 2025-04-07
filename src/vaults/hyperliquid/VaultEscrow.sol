@@ -80,7 +80,7 @@ contract VaultEscrow is IVaultEscrow, Initializable {
     //////////////////////////////////////////////////////////////*/
 
     constructor(address wrapper_, address vault_, address asset_, uint64 assetIndex_, uint8 assetPerpDecimals_) {
-        require(wrapper_ != address(0) || vault_ != address(0) || asset_ != address(0), Errors.ADDRESS_ZERO());
+        require(wrapper_ != address(0) && vault_ != address(0) && asset_ != address(0), Errors.ADDRESS_ZERO());
         require(assetPerpDecimals_ > 0, Errors.INVALID_PERP_DECIMALS());
 
         _vaultWrapper = wrapper_;
