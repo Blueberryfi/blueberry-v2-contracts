@@ -364,11 +364,8 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         // Calculate time elapsed since last fee collection
         uint256 timeElapsed = block.timestamp - $.lastFeeCollectionTimestamp;
 
-        // We subtract the pending redemption requests from the total asset value to avoid taking more fees than needed from
-        //    users who do not have any pending redemption requests
-        uint256 eligibleForFeeTake = grossAssets - $.requestSum.assets;
         // Calculate the pro-rated management fee based on time elapsed
-        feeAmount_ = eligibleForFeeTake * $.managementFeeBps * timeElapsed / BPS_DENOMINATOR / ONE_YEAR;
+        feeAmount_ = grossAssets * $.managementFeeBps * timeElapsed / BPS_DENOMINATOR / ONE_YEAR;
 
         return feeAmount_;
     }
