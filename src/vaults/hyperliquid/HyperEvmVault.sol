@@ -300,6 +300,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         internal
         override
     {
+        require(caller == owner, Errors.OnlyOwnerCanWithdraw());
         _beforeWithdraw(owner, assets_, shares_);
         super._withdraw(caller, receiver, owner, assets_, shares_);
     }
