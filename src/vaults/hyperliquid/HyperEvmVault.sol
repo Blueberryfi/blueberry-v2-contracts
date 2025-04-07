@@ -63,6 +63,9 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
     /// @notice The address of the L1 block number precompile, used for querying the L1 block number.
     address public constant L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS = 0x0000000000000000000000000000000000000809;
 
+    /// @notice The max numerator for fees
+    uint256 public constant MAX_FEE_NUMERATOR = 1500;
+
     /// @notice The denominator for the performance fee
     uint256 public constant BPS_DENOMINATOR = 10000;
 
@@ -384,6 +387,12 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
      */
     function _previewFeeShares(V1Storage storage $, uint256 tvl_) internal view returns (uint256) {
         uint256 expectedFee = _calculateFee($, tvl_);
+        
+        // In the event of multiple factors such as EXTREME vault inactivity & high fees we need to make sure the fee doesnt underflow
+        if (expectedFee >= tvl_) {
+            expectedFee = tvl_ / 2;
+        }
+
         return expectedFee.mulDivUp(totalSupply(), tvl_ - expectedFee);
     }
 
@@ -510,7 +519,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
 
     /// @notice Sets the management fee in basis points
     function setManagementFeeBps(uint64 newManagementFeeBps_) external onlyOwner {
-        require(newManagementFeeBps_ <= BPS_DENOMINATOR, Errors.FEE_TOO_HIGH());
+        require(newManagementFeeBps_ < MAX_FEE_NUMERATOR, Errors.FEE_TOO_HIGH());
 
         V1Storage storage $ = _getV1Storage();
         if ($.lastFeeCollectionTimestamp != 0) {
