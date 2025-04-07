@@ -41,8 +41,9 @@ interface IVaultEscrow {
      * @notice Withdraw assets from a vault position
      * @dev This function can only be called by the vault wrapper
      * @param assets_ The amount of assets to withdraw
+     * @return The amount of assets withdrawn (could be different than input due to scaling truncation)
      */
-    function withdraw(uint64 assets_) external;
+    function withdraw(uint64 assets_) external returns (uint64);
 
     /*//////////////////////////////////////////////////////////////
                             View Functions

@@ -115,7 +115,7 @@ contract VaultEscrow is IVaultEscrow, Initializable {
     }
 
     /// @inheritdoc IVaultEscrow
-    function withdraw(uint64 assets_) external override onlyVaultWrapper {
+    function withdraw(uint64 assets_) external override onlyVaultWrapper returns (uint64) {
         (uint64 vaultEquity_, uint64 lockedUntilTimestamp_) = _vaultEquity();
         require(block.timestamp > lockedUntilTimestamp_, Errors.L1_VAULT_LOCKED());
 
@@ -128,7 +128,7 @@ contract VaultEscrow is IVaultEscrow, Initializable {
         require(vaultEquity_ >= l1WithdrawState_.lastWithdraws, Errors.INSUFFICIENT_VAULT_EQUITY());
 
         // Withdraw from L1 vault
-        _withdrawFromL1Vault(assets_);
+        return _withdrawFromL1Vault(assets_);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -156,14 +156,18 @@ contract VaultEscrow is IVaultEscrow, Initializable {
         }
     }
 
-    function _withdrawFromL1Vault(uint64 assets_) internal {
-        uint256 amountPerp = _scaleToPerpDecimals(assets_);
+    function _withdrawFromL1Vault(uint64 assets_) internal returns (uint64) {
+        uint64 amountPerp = _scaleToPerpDecimals(assets_);
         // Withdraws assets from L1 vault
         L1_WRITE_PRECOMPILE.sendVaultTransfer(_vault, false, uint64(amountPerp));
         // Transfer assets to L1 spot
         L1_WRITE_PRECOMPILE.sendUsdClassTransfer(uint64(amountPerp), false);
+        // Convert again to make sure any scaling did not affect the spot amounts
+        assets_ = _scaleToSpotDecimals(amountPerp);
         // Bridges assets back to escrow's EVM account
         L1_WRITE_PRECOMPILE.sendSpot(assetSystemAddr(), _assetIndex, assets_);
+
+        return assets_;
     }
 
     /**
@@ -171,10 +175,10 @@ contract VaultEscrow is IVaultEscrow, Initializable {
      * @param amount_ The amount to scale.
      * @return The amount scaled to perp decimals.
      */
-    function _scaleToPerpDecimals(uint256 amount_) internal view returns (uint256) {
+    function _scaleToPerpDecimals(uint64 amount_) internal view returns (uint64) {
         return (_perpDecimals > _evmSpotDecimals)
-            ? amount_ * (10 ** (_perpDecimals - _evmSpotDecimals))
-            : amount_ / (10 ** (_evmSpotDecimals - _perpDecimals));
+            ? uint64(amount_ * (10 ** (_perpDecimals - _evmSpotDecimals)))
+            : uint64(amount_ / (10 ** (_evmSpotDecimals - _perpDecimals)));
     }
 
     /**
@@ -182,10 +186,10 @@ contract VaultEscrow is IVaultEscrow, Initializable {
      * @param amount_ The amount to scale.
      * @return The amount scaled to spot/evm decimals.
      */
-    function _scaleToSpotDecimals(uint256 amount_) internal view returns (uint256) {
+    function _scaleToSpotDecimals(uint64 amount_) internal view returns (uint64) {
         return (_perpDecimals > _evmSpotDecimals)
-            ? amount_ / (10 ** (_perpDecimals - _evmSpotDecimals))
-            : amount_ * (10 ** (_evmSpotDecimals - _perpDecimals));
+            ? uint64(amount_ / (10 ** (_perpDecimals - _evmSpotDecimals)))
+            : uint64(amount_ * (10 ** (_evmSpotDecimals - _perpDecimals)));
     }
 
     /*//////////////////////////////////////////////////////////////
