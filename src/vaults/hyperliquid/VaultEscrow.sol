@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC20Upgradeable} from "@openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 
 import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 
@@ -21,6 +22,7 @@ import {IVaultEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/IVaultEs
  */
 contract VaultEscrow is IVaultEscrow, Initializable {
     using SafeERC20 for ERC20Upgradeable;
+    using FixedPointMathLib for uint256;
 
     /*//////////////////////////////////////////////////////////////
                                 Storage
@@ -281,6 +283,11 @@ contract VaultEscrow is IVaultEscrow, Initializable {
             return $.assetBalance + $.l1WithdrawState.lastWithdraws;
         }
         return $.assetBalance;
+    }
+
+    function lockedUntil() external view returns (uint64) {
+        (, uint64 lockedUntil_) = _vaultEquity();
+        return uint64(uint256(lockedUntil_).unsafeDivUp(1000));
     }
 
     /*//////////////////////////////////////////////////////////////
