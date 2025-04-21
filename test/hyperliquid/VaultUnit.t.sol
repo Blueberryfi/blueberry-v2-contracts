@@ -331,7 +331,7 @@ contract VaultUnitTest is HlpHelpers {
         uint64 fee = 4.5375e8;
         vm.startPrank(alice);
         wrapper.requestRedeem(100e8);
-    
+
         vm.startPrank(bob);
         wrapper.requestRedeem(100e8);
 
@@ -351,7 +351,7 @@ contract VaultUnitTest is HlpHelpers {
         // Validate redeemRequest is cleared
         assertEq(wrapper.redeemRequests(alice).shares, 1);
         assertEq(wrapper.redeemRequests(alice).assets, 2);
-        
+
         // Bob approve 50e8 shares, i.e. a half of his assets
         vm.startPrank(bob);
         wrapper.approve(alice, 50e8);

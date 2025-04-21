@@ -24,8 +24,14 @@ contract UpdateVaultEscrow is Script {
 
     function run() public {
         // Input validation
-        require(EXISTING_BEACON_ADDRESS != address(0), "UpdateVaultEscrow: EXISTING_BEACON_ADDRESS cannot be zero address. Please configure the script.");
-        require(HYPER_EVM_VAULT_PROXY != address(0), "UpdateVaultEscrow: HYPER_EVM_VAULT_PROXY cannot be zero address. Please configure the script.");
+        require(
+            EXISTING_BEACON_ADDRESS != address(0),
+            "UpdateVaultEscrow: EXISTING_BEACON_ADDRESS cannot be zero address. Please configure the script."
+        );
+        require(
+            HYPER_EVM_VAULT_PROXY != address(0),
+            "UpdateVaultEscrow: HYPER_EVM_VAULT_PROXY cannot be zero address. Please configure the script."
+        );
 
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         require(deployerPrivateKey != 0, "UpdateVaultEscrow: PRIVATE_KEY environment variable not set.");
@@ -34,7 +40,10 @@ contract UpdateVaultEscrow is Script {
 
         // Verify the private key corresponds to the expected owner address
         // This assumes the OWNER constant holds the address that owns the beacon.
-        require(upgrader == OWNER, "UpdateVaultEscrow: The provided PRIVATE_KEY does not correspond to the expected OWNER address configured in the script.");
+        require(
+            upgrader == OWNER,
+            "UpdateVaultEscrow: The provided PRIVATE_KEY does not correspond to the expected OWNER address configured in the script."
+        );
 
         // Get reference to the existing beacon
         UpgradeableBeacon beacon = UpgradeableBeacon(EXISTING_BEACON_ADDRESS);
@@ -57,21 +66,26 @@ contract UpdateVaultEscrow is Script {
         //    these might be placeholder values, but it's safer to provide the real ones.
         VaultEscrow newEscrowImplementation = new VaultEscrow(
             HYPER_EVM_VAULT_PROXY, // Existing vault wrapper address
-            L1_VAULT,             // L1 Vault address
-            ASSET,                // Asset address
-            uint64(ASSET_INDEX),          // Asset Index
-            ASSET_PERP_DECIMALS   // Asset Perp Decimals
+            L1_VAULT, // L1 Vault address
+            ASSET, // Asset address
+            uint64(ASSET_INDEX), // Asset Index
+            ASSET_PERP_DECIMALS // Asset Perp Decimals
         );
 
         address newImplementationAddress = address(newEscrowImplementation);
         console.log("New VaultEscrow implementation deployed at:", newImplementationAddress);
 
         require(newImplementationAddress != address(0), "UpdateVaultEscrow: Failed to deploy new implementation.");
-        require(newImplementationAddress != currentImplementation, "UpdateVaultEscrow: New implementation address is the same as the old one. Did you forget to update the code?");
+        require(
+            newImplementationAddress != currentImplementation,
+            "UpdateVaultEscrow: New implementation address is the same as the old one. Did you forget to update the code?"
+        );
 
         // 2. Upgrade the Beacon to point to the new implementation.
         //    This transaction MUST be sent by the current owner of the Beacon (checked above).
-        console.log("Calling upgradeTo on Beacon", address(beacon), "to set implementation to", newImplementationAddress);
+        console.log(
+            "Calling upgradeTo on Beacon", address(beacon), "to set implementation to", newImplementationAddress
+        );
         beacon.upgradeTo(newImplementationAddress);
         console.log("Beacon upgrade transaction broadcasted.");
 
@@ -83,9 +97,15 @@ contract UpdateVaultEscrow is Script {
         console.log("Verifying implementation address in Beacon post-upgrade...");
         console.log("Final Implementation in Beacon:", finalImplementation);
 
-        require(finalImplementation == newImplementationAddress, "UpdateVaultEscrow: Beacon implementation address did NOT update correctly after broadcast!");
+        require(
+            finalImplementation == newImplementationAddress,
+            "UpdateVaultEscrow: Beacon implementation address did NOT update correctly after broadcast!"
+        );
 
         console.log("VaultEscrow implementation successfully updated for Beacon:", EXISTING_BEACON_ADDRESS);
-        console.log("All VaultEscrow proxies pointing to this beacon will now use the new implementation at:", newImplementationAddress);
+        console.log(
+            "All VaultEscrow proxies pointing to this beacon will now use the new implementation at:",
+            newImplementationAddress
+        );
     }
 }

@@ -44,6 +44,9 @@ library BlueberryErrors {
     /// @notice Error thrown when a users withdraw request is too large
     error WITHDRAW_TOO_LARGE();
 
+    /// @notice Error thrown when a users withdraw is too small
+    error WITHDRAW_TOO_SMALL();
+
     /// @notice Error thrown when the perp decimals are invalid
     error INVALID_PERP_DECIMALS();
 
@@ -67,4 +70,18 @@ library BlueberryErrors {
 
     /// @notice Error thrown when someone other than the owner tries to call redeem or withdraw
     error OnlyOwnerCanWithdraw();
+
+    /// @notice Error thrown when a precompile call fails
+    error PRECOMPILE_CALL_FAILED();
+
+    /// @notice Error thrown the router tries to add an asset that is already supported
+    error ASSET_ALREADY_SUPPORTED();
+
+    /// @notice Error thrown when the router tries to remove an asset after the max number of assets is reached
+    error ASSET_LIMIT_EXCEEDED();
+
+    /// @notice Error thrown when the router tries to add an asset but there is a mismatch in the assets evm address
+    error INVALID_EVM_ADDRESS();
+
+    error INVALID_OPERATION();
 }

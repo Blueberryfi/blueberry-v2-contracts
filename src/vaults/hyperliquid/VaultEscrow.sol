@@ -135,7 +135,7 @@ contract VaultEscrow is IVaultEscrow, Initializable {
         return _withdrawFromL1Vault(assets_);
     }
 
-    /// @notice Reduces the internal accounting balance of the vault. 
+    /// @notice Reduces the internal accounting balance of the vault.
     function reduceBalance(uint64 assets_) external onlyVaultWrapper {
         V1Storage storage $ = _getV1Storage();
         _updateState($);
