@@ -17,7 +17,7 @@ interface IProxyAdmin {
 contract UpgradeRouterScript is Script {
     bytes32 internal constant EIP1967_ADMIN_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
 
-    address constant ROUTER_PROXY_ADDRESS = 0x1921B49134eb53D6eac58abFd12A47f5Dbd8b5b7;
+    address constant ROUTER_PROXY_ADDRESS = 0x5E2f726795d08d0be9221464750Eb2149E937C71;
 
     address constant L1_VAULT_ADDRESS = 0xa15099a30BBf2e68942d6F4c43d70D04FAEab0A0;
 
@@ -47,22 +47,5 @@ contract UpgradeRouterScript is Script {
         proxyAdmin.upgrade(ROUTER_PROXY_ADDRESS, address(router));
 
         vm.stopBroadcast();
-    }
-
-    function getAdminAddress() internal view returns (address adminAddress) {
-        bytes32 slot = EIP1967_ADMIN_SLOT;
-        assembly {
-            // Load the 32-byte value from storage at the position specified by 'slot'
-            let slotValue := sload(slot)
-            // Addresses are 20 bytes (160 bits). They are stored right-aligned in the 32-byte slot.
-            // Mask the lower 160 bits to isolate the address.
-            // 0xffffffffffffffffffffffffffffffffffffffff is a 160-bit mask (20 bytes of 1s)
-            adminAddress := and(slotValue, 0xffffffffffffffffffffffffffffffffffffffff)
-
-            // Alternative using bit shift (shr(offset, value)):
-            // Shifts 'slotValue' right by 96 bits (32 bytes * 8 bits/byte - 20 bytes * 8 bits/byte = 96 bits)
-            // Effectively zeroing out the upper 12 bytes and leaving the lower 20 bytes (the address).
-            // adminAddress := shr(96, slotValue)
-        }
     }
 }

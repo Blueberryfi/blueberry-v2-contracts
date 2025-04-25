@@ -8,8 +8,8 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/Upgradeabl
 contract UpgradeProxy is Script {
     // --- Configuration ---
     // !!! MUST BE UPDATED with your deployed addresses !!!
-    address public constant EXISTING_BEACON_ADDRESS = 0x912E16E7CACCB08a5004EbEE4BBfCf168DD2B76E; // <--- Replace with the actual Beacon address
-    address public constant HYPERLIQUID_ROUTER_PROXY = 0x1921B49134eb53D6eac58abFd12A47f5Dbd8b5b7; // <--- Replace with the actual Vault Proxy address
+    address public constant EXISTING_BEACON_ADDRESS = 0xE274423b1d8d32C485cFC08FEbfD88247149b49d; // <--- Replace with the actual Beacon address
+    address public constant HYPERLIQUID_ROUTER_PROXY = 0x5E2f726795d08d0be9221464750Eb2149E937C71; // <--- Replace with the actual Vault Proxy address
 
     // Constants used during original deployment - needed if constructor sets immutables
     // Ensure these match the original deployment environment if required by the *new* implementation's constructor

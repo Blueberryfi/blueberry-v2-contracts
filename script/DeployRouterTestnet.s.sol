@@ -6,9 +6,8 @@ import {ERC20} from "@solmate/tokens/ERC20.sol";
 import {HyperVaultRouter} from "../src/vaults/hyperliquid/HyperVaultRouter.sol";
 import {HyperliquidEscrow} from "../src/vaults/hyperliquid/HyperliquidEscrow.sol";
 import {MintableToken} from "../src/utils/MintableToken.sol";
-import {MockERC20} from "../test/mocks/MockERC20.sol";
 
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {LibRLP} from "@solady/utils/LibRLP.sol";
@@ -35,8 +34,9 @@ contract DeployRouterTestnet is Script {
 
         // 1. Deploy Share Token & Mock Asset
         MintableToken shareToken = new MintableToken("Wrapped HLP", "wHLP", 18, deployer);
+        console.log("wHLP deployed at", address(shareToken));
 
-        // 2. Deploy the VaultEscrow via the Beacon Proxy Pattern
+        // 2. Deploy the HyperliquidEscrow via the Beacon Proxy Pattern
         // 2(a). Compute the expected address of the vault wrapper
         address expectedRouter = LibRLP.computeAddress(deployer, vm.getNonce(deployer) + 3 + escrowCounts);
 
@@ -70,8 +70,9 @@ contract DeployRouterTestnet is Script {
         // 2(b). Deploy the Proxy Contract
         HyperVaultRouter router = HyperVaultRouter(
             address(
-                new ERC1967Proxy(
+                new TransparentUpgradeableProxy(
                     implementation,
+                    OWNER,
                     abi.encodeWithSelector(
                         HyperVaultRouter.initialize.selector,
                         escrows,
@@ -82,14 +83,14 @@ contract DeployRouterTestnet is Script {
             )
         );
 
-        require(address(router) == expectedRouter, "Vault address mismatch");
+        require(address(router) == expectedRouter, "Router address mismatch");
 
         ERC20(PURR).approve(address(router), type(uint256).max);
 
         // 3. Set minter permissions on router
         shareToken.grantRole(shareToken.MINTER_ROLE(), address(router));
 
-        console.log("Vault Proxy deployed at", address(router));
+        console.log("Router Proxy deployed at", address(router));
 
         console.log("Escrow 0", address(router.escrows(0)));
         console.log("Escrow 1", address(router.escrows(1)));
