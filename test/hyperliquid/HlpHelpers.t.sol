@@ -3,8 +3,8 @@ pragma solidity 0.8.28;
 
 import {Test} from "forge-std/test.sol";
 import {MockERC20, ERC20} from "../mocks/MockERC20.sol";
-import {HyperEvmVault} from "../../src/vaults/hyperliquid/HyperEvmVault.sol";
-import {VaultEscrow} from "../../src/vaults/hyperliquid/VaultEscrow.sol";
+import {HyperEvmVault} from "../../src/vaults/hyperliquid/deprecated/HyperEvmVault.sol";
+import {VaultEscrow} from "../../src/vaults/hyperliquid/deprecated/VaultEscrow.sol";
 import {BlueberryErrors} from "../../src/helpers/BlueberryErrors.sol";
 import {MockL1BlockNumberPrecompile} from "../mocks/MockHyperliquidPrecompiles.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";

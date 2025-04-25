@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.28;
 
+import {IHyperliquidCommon} from "@blueberry-v2/vaults/hyperliquid/interfaces/IHyperliquidCommon.sol";
+
 /**
  * @title IHyperliquidEscrow
  */
-interface IHyperliquidEscrow {
+interface IHyperliquidEscrow is IHyperliquidCommon {
     /*//////////////////////////////////////////////////////////////
                                  Structs
     //////////////////////////////////////////////////////////////*/
@@ -27,26 +29,6 @@ interface IHyperliquidEscrow {
     struct UserVaultEquity {
         uint64 equity;
         uint64 lockedUntilTimestamp;
-    }
-
-    /// @notice Hyperliquid precompile struct: Token information
-    struct TokenInfo {
-        string name;
-        uint64[] spots;
-        uint64 deployerTradingFeeShare;
-        address deployer;
-        address evmContract;
-        uint8 szDecimals;
-        uint8 weiDecimals;
-        int8 evmExtraWeiDecimals;
-    }
-
-    /// @notice Necessary Hyperliquid core & evm information for a token index
-    struct Token {
-        address evmContract;
-        uint8 szDecimals;
-        uint8 weiDecimals;
-        uint8 evmDecimals;
     }
 
     /**
@@ -90,48 +72,38 @@ interface IHyperliquidEscrow {
 
     /**
      * @notice Returns the exchange rate of a token in USD
-     * @param token The token index
+     * @param spotMarket The Spot Market index of a token
      * @return The exchange rate in USD with 18 decimals
      */
-    function getRate(uint64 token) external view returns (uint256);
+    function getRate(uint32 spotMarket) external view returns (uint256);
 
-    /**
-     * @notice Returns the system address for an asset
-     * @param token The token index
-     * @return The system address for the asset
-     */
-    function assetSystemAddr(uint64 token) external pure returns (address);
+    // /**
+    //  * @notice The L1 address of the vault
+    //  * @return The L1 vault address
+    //  */
+    // function L1_VAULT() external view returns (address);
 
-    /// @notice Returns whether the asset is supported or not by the escrow
-    function isAssetSupported(uint64 token) external view returns (bool);
+    // /**
+    //  * @notice The address of the manager
+    //  * @return The manager address
+    //  */
+    // function ROUTER() external view returns (address);
 
-    /**
-     * @notice The L1 address of the vault
-     * @return The L1 vault address
-     */
-    function L1_VAULT() external view returns (address);
+    // /**
+    //  * @notice USDC perp decimals constant
+    //  * @return The USDC perp decimals
+    //  */
+    // function USDC_PERP_DECIMALS() external pure returns (uint8);
 
-    /**
-     * @notice The address of the manager
-     * @return The manager address
-     */
-    function ROUTER() external view returns (address);
+    // /**
+    //  * @notice USDC spot decimals constant
+    //  * @return The USDC spot decimals
+    //  */
+    // function USDC_SPOT_DECIMALS() external pure returns (uint8);
 
-    /**
-     * @notice USDC perp decimals constant
-     * @return The USDC perp decimals
-     */
-    function USDC_PERP_DECIMALS() external pure returns (uint8);
-
-    /**
-     * @notice USDC spot decimals constant
-     * @return The USDC spot decimals
-     */
-    function USDC_SPOT_DECIMALS() external pure returns (uint8);
-
-    /**
-     * @notice USDC spot index constant
-     * @return The USDC spot index
-     */
-    function USDC_SPOT_INDEX() external pure returns (uint64);
+    // /**
+    //  * @notice USDC spot index constant
+    //  * @return The USDC spot index
+    //  */
+    // function USDC_SPOT_INDEX() external pure returns (uint64);
 }

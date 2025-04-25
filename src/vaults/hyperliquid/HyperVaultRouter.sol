@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.28;
 
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {Ownable2StepUpgradeable} from "@openzeppelin-contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {FixedPointMathLib as FpMath} from "@solmate/utils/FixedPointMathLib.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -13,13 +14,15 @@ import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.s
 import {MintableToken} from "@blueberry-v2/utils/MintableToken.sol";
 import {HyperliquidEscrow} from "@blueberry-v2/vaults/hyperliquid/HyperliquidEscrow.sol";
 import {IHyperVaultRouter} from "@blueberry-v2/vaults/hyperliquid/interfaces/IHyperVaultRouter.sol";
+import {IHyperliquidEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/IHyperliquidEscrow.sol";
 
 /**
  * @title HyperVaultRouter
  * @author Blueberry
- * @notice A vault router contract that coordinates deposits of assets into escrow contracts
+ * @notice A vault router contract that coordinates deposits of assets into escrow contracts and handles minting and burning of share tokens
  */
 contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
+    using EnumerableSet for EnumerableSet.UintSet;
     using SafeERC20 for IERC20;
     using FpMath for uint256;
 
@@ -27,20 +30,24 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
                                 Storage
     //////////////////////////////////////////////////////////////*/
 
-    /// @custom:storage-location erc7201:hyperevm.vault.v1.storage
+    /// @custom:storage-location erc7201:hypervault.router.v1.storage
     struct V1Storage {
         /// @notice The last time the fees were accrued
         uint64 lastFeeCollectionTimestamp;
         /// @notice The management fee in basis points
         uint64 managementFeeBps;
-        /// @notice The minimum amount of assets that can be deposited into the vault.
-        uint64 minDepositAmount;
+        /// @notice The minimum value in USD that can be deposited into the vault scaled to 1e18
+        uint64 minDepositValue;
         /// @notice The asset that will be used to withdraw from the vault
         address withdrawAsset;
         /// @notice An array of addresses of escrow contracts for the vault
         address[] escrows;
         /// @notice Mapping of asset addresses to their indexes
         mapping(address => uint64) assetIndexes;
+        /// @notice Mapping of asset indexes to their details
+        mapping(uint64 => AssetDetails) assetDetails;
+        // @notice Mapping of supported assets
+        EnumerableSet.UintSet supportedAssets;
         /// @notice The address of the fee recipient
         address feeRecipient;
     }
@@ -49,14 +56,23 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
                         Constants & Immutables
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The L1 address of the vault being deposited into
-    address public immutable L1_VAULT;
+    /*==== Hyperliquid Precompiles ====*/
+
+    /// @notice Precompile for querying spot market information
+    address constant SPOT_INFO_PRECOMPILE_ADDRESS = 0x000000000000000000000000000000000000080b;
+
+    /// @notice Precompile for querying token information
+    address constant TOKEN_INFO_PRECOMPILE_ADDRESS = 0x000000000000000000000000000000000000080C;
+
+    /*==== USDC Spot Index Constant ====*/
+
+    /// @notice The spot index for USDC
+    uint64 public constant USDC_SPOT_INDEX = 0;
+
+    /*==== General Constants & Immutables ====*/
 
     /// @notice The address of the share token for the vault
     address public immutable SHARE_TOKEN;
-
-    /// @notice The address of the L1 block number precompile, used for querying the L1 block number.
-    address public constant L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS = 0x0000000000000000000000000000000000000809;
 
     /// @notice The max numerator for fees
     uint256 public constant MAX_FEE_NUMERATOR = 1500;
@@ -67,18 +83,18 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     /// @notice The number of seconds in a year
     uint256 public constant ONE_YEAR = 360 days;
 
+    /*==== Storage Locations ====*/
+
     /// @notice The location for the vault storage
-    bytes32 public constant V1_VAULT_STORAGE_LOCATION =
-        keccak256(abi.encode(uint256(keccak256(bytes("hyperevm.vault.v1.storage"))) - 1)) & ~bytes32(uint256(0xff));
+    bytes32 public constant V1_HYPERVAULT_ROUTER_STORAGE_LOCATION =
+        keccak256(abi.encode(uint256(keccak256(bytes("hypervault.router.v1.storage"))) - 1)) & ~bytes32(uint256(0xff));
 
     /*//////////////////////////////////////////////////////////////
                         Constructor & Initializer
     //////////////////////////////////////////////////////////////*/
 
-    constructor(address l1Vault_, address shareToken_) {
-        require(l1Vault_ != address(0), Errors.ADDRESS_ZERO());
+    constructor(address shareToken_) {
         require(shareToken_ != address(0), Errors.ADDRESS_ZERO());
-        L1_VAULT = l1Vault_;
         SHARE_TOKEN = shareToken_;
 
         _disableInitializers();
@@ -91,8 +107,10 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         V1Storage storage $ = _getV1Storage();
 
-        $.minDepositAmount = minDeposit_;
+        $.minDepositValue = minDeposit_;
         $.feeRecipient = owner_; // Initial fee recipient is the owner
+        $.escrows = escrows_;
+        $.managementFeeBps = 150; // Initial management fee is 1.5%
 
         // Initialize all parent contracts
         __Ownable2Step_init();
@@ -108,15 +126,19 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     /// @inheritdoc IHyperVaultRouter
     function deposit(address asset, uint256 amount) external override nonReentrant returns (uint256 shares) {
         V1Storage storage $ = _getV1Storage();
-        require(amount >= $.minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT());
-        require(_isAssetSupported($, asset), Errors.COLLATERAL_NOT_SUPPORTED());
 
-        uint64 assetIndex = $.assetIndexes[asset];
+        // Get the escrow to deposit into
+        // This will also be used to calculate the USD value of the asset as all escrows have built in spot oracles
         HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
 
+        uint64 assetIndex_ = $.assetIndexes[asset];
+        require(_isAssetSupported($, assetIndex_), Errors.COLLATERAL_NOT_SUPPORTED());
+        AssetDetails memory details = $.assetDetails[assetIndex_];
+
         // Get the USD value of the asset to properly calculate shares to mint
-        // TODO: Scale the USD value to 18 decimals
-        uint256 usdValue = escrow.getRate(assetIndex).mulWadDown(amount);
+        uint256 scaler = 10 ** (18 - details.evmDecimals);
+        uint256 usdValue = escrow.getRate(details.spotMarket).mulWadDown(amount * scaler);
+        require(usdValue >= $.minDepositValue, Errors.MIN_DEPOSIT_AMOUNT());
 
         if (_shareSupply() == 0) {
             shares = usdValue;
@@ -129,7 +151,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         emit Deposit(msg.sender, asset, amount, shares);
 
-        // Transfer the asset to the contract and mint shares to user
+        // Transfer the asset to the escrow contract and mint shares to user
         IERC20(asset).safeTransferFrom(msg.sender, address(escrow), amount);
         MintableToken(SHARE_TOKEN).mint(msg.sender, shares);
     }
@@ -145,18 +167,20 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         uint256 usdAmount = shares.mulDivDown(tvl_, _shareSupply());
 
         // Get amount of withdraw asset from escrow
-        HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
-        uint64 assetIndex = $.assetIndexes[$.withdrawAsset];
+        uint64 assetIndex_ = $.assetIndexes[$.withdrawAsset];
+        AssetDetails memory details = $.assetDetails[assetIndex_];
 
         // Convert the USD amount to withdraw to the withdraw asset amount
-        amount = escrow.getRate(assetIndex).mulWadDown(usdAmount);
+        HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
+        amount = escrow.getRate(details.spotMarket).mulWadDown(usdAmount);
+        uint256 scaler = 10 ** (18 - details.evmDecimals);
+        amount = amount / scaler;
         require(amount > 0, Errors.AMOUNT_ZERO());
 
         emit Redeem(msg.sender, shares, amount);
 
-        // Burn the shares from the user
+        // Burn the shares from the user and transfer the withdraw asset to the user
         MintableToken(SHARE_TOKEN).burnFrom(msg.sender, shares);
-
         _transferAssetsToUser($, amount);
     }
 
@@ -196,8 +220,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     }
 
     /// @notice Sets the minimum deposit amount for the vault
-    function setMinDepositAmount(uint64 newMinDepositAmount_) external onlyOwner {
-        _getV1Storage().minDepositAmount = newMinDepositAmount_;
+    function setMinDepositValue(uint64 newMinDepositValue_) external onlyOwner {
+        _getV1Storage().minDepositValue = newMinDepositValue_;
     }
 
     /// @notice Sets the fee recipient for the vault
@@ -207,26 +231,43 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     }
 
     /// @notice Adds a new supported asset to all the escrows
-    function addAsset(address assetAddr, uint32 assetIndex) external onlyOwner {
+    function addAsset(address assetAddr, uint32 assetIndex_, uint32 spotMarket) external onlyOwner {
         V1Storage storage $ = _getV1Storage();
 
+        TokenInfo memory info = _getTokenInfo(assetIndex_);
+        require(info.evmContract == assetAddr, Errors.INVALID_EVM_ADDRESS());
+        require(_validateSpotMarket(assetIndex_, spotMarket), Errors.INVALID_SPOT_MARKET());
+
+        // Calculate the evm Decimals using the evmExtraWeiDecimals returned from the tokenInfo
+        uint8 evmDecimals =
+            info.evmExtraWeiDecimals > 0 ? uint8(int8(info.weiDecimals) + info.evmExtraWeiDecimals) : info.weiDecimals;
+
+        AssetDetails memory details = AssetDetails({
+            evmContract: info.evmContract,
+            szDecimals: info.szDecimals,
+            weiDecimals: info.weiDecimals,
+            evmDecimals: evmDecimals,
+            spotMarket: spotMarket
+        });
+
+        // Add the asset to storage
+        $.assetIndexes[assetAddr] = assetIndex_;
+        $.assetDetails[assetIndex_] = details;
+        $.supportedAssets.add(assetIndex_);
+
+        // Iterate through all the escrows to add supported assets
         uint256 len = $.escrows.length;
         for (uint256 i = 0; i < len; ++i) {
-            HyperliquidEscrow($.escrows[i]).addAsset(assetAddr, assetIndex);
+            HyperliquidEscrow($.escrows[i]).addAsset(assetIndex_, details);
         }
-    }
 
-    /// @notice Sets the withdraw asset for the vault
-    function setWithdrawAsset(address asset) external onlyOwner {
-        V1Storage storage $ = _getV1Storage();
-        require(_isAssetSupported($, asset), Errors.COLLATERAL_NOT_SUPPORTED());
-        $.withdrawAsset = asset;
+        emit AssetAdded(assetIndex_, details);
     }
 
     /// @notice Removes a supported asset from all the escrows
     function removeAsset(address asset) external onlyOwner {
         V1Storage storage $ = _getV1Storage();
-        uint64 assetIndex = $.assetIndexes[asset];
+        uint64 assetIndex_ = $.assetIndexes[asset];
 
         // If the asset is the withdraw asset, set it to 0. This will prevent future withdraws until
         //     a new withdraw asset is set
@@ -234,11 +275,25 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
             $.withdrawAsset = address(0);
         }
         delete $.assetIndexes[asset];
+        delete $.assetDetails[assetIndex_];
+        $.supportedAssets.remove(assetIndex_);
 
         uint256 len = $.escrows.length;
         for (uint256 i = 0; i < len; ++i) {
-            HyperliquidEscrow($.escrows[i]).removeAsset(assetIndex);
+            HyperliquidEscrow($.escrows[i]).removeAsset(assetIndex_);
         }
+
+        emit AssetRemoved(assetIndex_);
+    }
+
+    /// @notice Sets the withdraw asset for the vault
+    function setWithdrawAsset(address asset) external onlyOwner {
+        V1Storage storage $ = _getV1Storage();
+        uint64 assetIndex_ = $.assetIndexes[asset];
+        require(_isAssetSupported($, assetIndex_), Errors.COLLATERAL_NOT_SUPPORTED());
+
+        $.withdrawAsset = asset;
+        emit WithdrawAssetUpdated(assetIndex_);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -288,6 +343,10 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         }
     }
 
+    /**
+     * @notice Returns the total supply of the share tokens
+     * @return The total supply of the share tokens
+     */
     function _shareSupply() internal view returns (uint256) {
         return IERC20(SHARE_TOKEN).totalSupply();
     }
@@ -323,14 +382,50 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         return feeAmount_;
     }
 
-    function _isAssetSupported(V1Storage storage $, address asset) internal view returns (bool) {
-        HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
-        return escrow.isAssetSupported($.assetIndexes[asset]);
+    /**
+     * @notice Returns whether an asset is supported by the vault
+     * @param $ The storage pointer to the v1 vault storage
+     * @param assetIndex_ The asset index to check
+     * @return Whether the asset is supported
+     */
+    function _isAssetSupported(V1Storage storage $, uint64 assetIndex_) internal view returns (bool) {
+        return $.supportedAssets.contains(assetIndex_);
     }
 
-    /*//////////////////////////////////////////////////////////////////
+    /**
+     * @notice Retrieves the token info for a specific asset via Hyperliquid Precompiles
+     * @param assetIndex_ The asset index to get info for
+     * @return The token info for the asset
+     */
+    function _getTokenInfo(uint32 assetIndex_) internal view returns (TokenInfo memory) {
+        (bool success, bytes memory result) = TOKEN_INFO_PRECOMPILE_ADDRESS.staticcall(abi.encode(assetIndex_));
+        require(success, Errors.PRECOMPILE_CALL_FAILED());
+        return abi.decode(result, (TokenInfo));
+    }
+
+    /**
+     * @notice Validates the spot market for a specific asset by querying the Hyperliquid Precompile
+     * @param assetIndex_ The asset index to validate
+     * @param spotMarket The spot market index to validate
+     * @return True if the spot market is valid, false otherwise
+     */
+    function _validateSpotMarket(uint64 assetIndex_, uint32 spotMarket) internal view returns (bool) {
+        (bool success, bytes memory result) = SPOT_INFO_PRECOMPILE_ADDRESS.staticcall(abi.encode(spotMarket));
+        require(success, Errors.PRECOMPILE_CALL_FAILED());
+        SpotInfo memory spotInfo = abi.decode(result, (SpotInfo));
+
+        for (uint256 i = 0; i < 2; i++) {
+            if (spotInfo.tokens[i] == USDC_SPOT_INDEX || spotInfo.tokens[i] == assetIndex_) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /*//////////////////////////////////////////////////////////////
                             View Functions
     //////////////////////////////////////////////////////////////*/
+
     /// @inheritdoc IHyperVaultRouter
     function escrows(uint256 index) external view override returns (address) {
         V1Storage storage $ = _getV1Storage();
@@ -355,13 +450,61 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         return maxWithdraw.mulDivDown(_shareSupply(), tvl());
     }
 
+    /// @inheritdoc IHyperVaultRouter
+    function assetIndex(address asset) external view override returns (uint64) {
+        V1Storage storage $ = _getV1Storage();
+        return $.assetIndexes[asset];
+    }
+
+    /// @notice IHyperVaultRouter
+    function withdrawAsset() external view override returns (address) {
+        V1Storage storage $ = _getV1Storage();
+        return $.withdrawAsset;
+    }
+
+    /// @notice IHyperVaultRouter
+    function isAssetSupported(uint64 assetIndex_) external view override returns (bool) {
+        V1Storage storage $ = _getV1Storage();
+        return _isAssetSupported($, assetIndex_);
+    }
+
+    /// @notice IHyperVaultRouter
+    function assetDetails(uint64 assetIndex_) external view override returns (AssetDetails memory) {
+        V1Storage storage $ = _getV1Storage();
+        return $.assetDetails[assetIndex_];
+    }
+
+    /// @notice IHyperVaultRouter
+    function lastFeeCollectionTimestamp() external view override returns (uint256) {
+        V1Storage storage $ = _getV1Storage();
+        return $.lastFeeCollectionTimestamp;
+    }
+
+    /// @notice IHyperVaultRouter
+    function managementFee() external view override returns (uint256) {
+        V1Storage storage $ = _getV1Storage();
+        return $.managementFeeBps;
+    }
+
+    /// @notice IHyperVaultRouter
+    function minDeposit() external view override returns (uint256) {
+        V1Storage storage $ = _getV1Storage();
+        return $.minDepositValue;
+    }
+
+    /// @notice IHyperVaultRouter
+    function feeRecipient() external view override returns (address) {
+        V1Storage storage $ = _getV1Storage();
+        return $.feeRecipient;
+    }
+
     /*//////////////////////////////////////////////////////////////
                             Pure Functions
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Retrieves the order storage
     function _getV1Storage() private pure returns (V1Storage storage $) {
-        bytes32 slot = V1_VAULT_STORAGE_LOCATION;
+        bytes32 slot = V1_HYPERVAULT_ROUTER_STORAGE_LOCATION;
         assembly {
             $.slot := slot
         }

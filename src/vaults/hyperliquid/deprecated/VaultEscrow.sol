@@ -9,7 +9,7 @@ import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 
 import {IL1Write} from "@blueberry-v2/vaults/hyperliquid/interfaces/IL1Write.sol";
-import {IVaultEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/IVaultEscrow.sol";
+import {IVaultEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/deprecated/IVaultEscrow.sol";
 
 /**
  * @title VaultEscrow

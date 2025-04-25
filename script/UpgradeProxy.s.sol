@@ -2,24 +2,20 @@
 pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
-import {VaultEscrow} from "../src/vaults/hyperliquid/VaultEscrow.sol"; // Ensure this path points to the *NEW* VaultEscrow code
+import {HyperliquidEscrow} from "../src/vaults/hyperliquid/HyperliquidEscrow.sol"; // Ensure this path points to the *NEW* VaultEscrow code
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
-contract UpdateVaultEscrow is Script {
+contract UpgradeProxy is Script {
     // --- Configuration ---
     // !!! MUST BE UPDATED with your deployed addresses !!!
-    address public constant EXISTING_BEACON_ADDRESS = 0x13dEA73688C595041FD0bD7617f1629eAbcD7Df5; // <--- Replace with the actual Beacon address
-    address public constant HYPER_EVM_VAULT_PROXY = 0x182a1E1d7Ee2DEC6331cDF6a668BdD85D9Ad86CE; // <--- Replace with the actual Vault Proxy address
+    address public constant EXISTING_BEACON_ADDRESS = 0x912E16E7CACCB08a5004EbEE4BBfCf168DD2B76E; // <--- Replace with the actual Beacon address
+    address public constant HYPERLIQUID_ROUTER_PROXY = 0x1921B49134eb53D6eac58abFd12A47f5Dbd8b5b7; // <--- Replace with the actual Vault Proxy address
 
     // Constants used during original deployment - needed if constructor sets immutables
     // Ensure these match the original deployment environment if required by the *new* implementation's constructor
     address public constant L1_VAULT = 0xa15099a30BBf2e68942d6F4c43d70D04FAEab0A0; // Or your specific L1 Vault
-    address public constant ASSET = 0xd9CBEC81df392A88AEff575E962d149d57F4d6bc; // Or your specific Asset
     address public constant OWNER = 0x263c0a1ff85604f0ee3f4160cAa445d0bad28dF7; // The address that OWNS the Beacon and can upgrade it
 
-    // Constants from VaultEscrow constructor (assuming they are needed for deployment)
-    uint256 public constant ASSET_INDEX = 0;
-    uint8 public constant ASSET_PERP_DECIMALS = 6;
     // --- End Configuration ---
 
     function run() public {
@@ -29,7 +25,7 @@ contract UpdateVaultEscrow is Script {
             "UpdateVaultEscrow: EXISTING_BEACON_ADDRESS cannot be zero address. Please configure the script."
         );
         require(
-            HYPER_EVM_VAULT_PROXY != address(0),
+            HYPERLIQUID_ROUTER_PROXY != address(0),
             "UpdateVaultEscrow: HYPER_EVM_VAULT_PROXY cannot be zero address. Please configure the script."
         );
 
@@ -64,12 +60,9 @@ contract UpdateVaultEscrow is Script {
         //    immutable variables, these *must* be correct for the intended environment.
         //    If the constructor is empty or doesn't set critical state used post-upgrade,
         //    these might be placeholder values, but it's safer to provide the real ones.
-        VaultEscrow newEscrowImplementation = new VaultEscrow(
-            HYPER_EVM_VAULT_PROXY, // Existing vault wrapper address
+        HyperliquidEscrow newEscrowImplementation = new HyperliquidEscrow(
             L1_VAULT, // L1 Vault address
-            ASSET, // Asset address
-            uint64(ASSET_INDEX), // Asset Index
-            ASSET_PERP_DECIMALS // Asset Perp Decimals
+            HYPERLIQUID_ROUTER_PROXY // Existing vault wrapper address
         );
 
         address newImplementationAddress = address(newEscrowImplementation);

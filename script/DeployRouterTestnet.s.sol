@@ -18,6 +18,10 @@ contract DeployRouterTestnet is Script {
     address public constant ASSET = 0xd9CBEC81df392A88AEff575E962d149d57F4d6bc;
     address public constant OWNER = 0x263c0a1ff85604f0ee3f4160cAa445d0bad28dF7;
 
+    // Testnet assets to support
+    address public constant PURR = 0xa9056c15938f9aff34CD497c722Ce33dB0C2fD57;
+    uint32 public constant PURR_INDEX = 1;
+
     uint256 escrowCounts = 2;
 
     address[] public escrows;
@@ -27,12 +31,10 @@ contract DeployRouterTestnet is Script {
         vm.startBroadcast(deployerPrivateKey);
         address deployer = vm.addr(deployerPrivateKey);
 
-        //// Deployment steps ////
+        // //// Deployment steps ////
 
         // 1. Deploy Share Token & Mock Asset
         MintableToken shareToken = new MintableToken("Wrapped HLP", "wHLP", 18, deployer);
-
-        MockERC20 asset = new MockERC20("Dumbass Memecoin", "DAMEME", 6);
 
         // 2. Deploy the VaultEscrow via the Beacon Proxy Pattern
         // 2(a). Compute the expected address of the vault wrapper
@@ -62,11 +64,11 @@ contract DeployRouterTestnet is Script {
 
         // 2. Deploy the HyperVaultRouter via the UUPS Proxy Pattern
         // 2(a). Deploy the Implementation Contract
-        address implementation = address(new HyperVaultRouter(L1_VAULT, address(shareToken)));
+        address implementation = address(new HyperVaultRouter(address(shareToken)));
         console.log("Implementation deployed at", address(implementation));
 
         // 2(b). Deploy the Proxy Contract
-        HyperVaultRouter vault = HyperVaultRouter(
+        HyperVaultRouter router = HyperVaultRouter(
             address(
                 new ERC1967Proxy(
                     implementation,
@@ -80,11 +82,16 @@ contract DeployRouterTestnet is Script {
             )
         );
 
-        require(address(vault) == expectedRouter, "Vault address mismatch");
+        require(address(router) == expectedRouter, "Vault address mismatch");
 
-        console.log("Vault Proxy deployed at", address(vault));
+        ERC20(PURR).approve(address(router), type(uint256).max);
 
-        console.log("Escrow 0", address(vault.escrows(0)));
-        console.log("Escrow 1", address(vault.escrows(1)));
+        // 3. Set minter permissions on router
+        shareToken.grantRole(shareToken.MINTER_ROLE(), address(router));
+
+        console.log("Vault Proxy deployed at", address(router));
+
+        console.log("Escrow 0", address(router.escrows(0)));
+        console.log("Escrow 1", address(router.escrows(1)));
     }
 }

@@ -84,4 +84,12 @@ library BlueberryErrors {
     error INVALID_EVM_ADDRESS();
 
     error INVALID_OPERATION();
+
+    error INVALID_SPOT_MARKET();
+
+    /// @notice Error thrown when too frequent admin actions are performed
+    error TOO_FREQUENT_ACTIONS();
+
+    /// @notice Error thrown when the length of the assets and amounts arrays do not match
+    error MISMATCHED_LENGTH();
 }
