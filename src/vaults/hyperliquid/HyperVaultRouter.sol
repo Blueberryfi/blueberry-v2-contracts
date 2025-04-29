@@ -205,6 +205,21 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         return (block.timestamp / 2 days) % len;
     }
 
+    /**
+     * @notice External function to poke the fee taker
+     * @dev This function will be executed by the wrapped share token before transferring shares
+     *      but can be executed by anyone.
+     */
+    function pokeFees() external nonReentrant {
+        V1Storage storage $ = _getV1Storage();
+        uint256 tvl_ = tvl();
+        if (tvl_ == 0) {
+            $.lastFeeCollectionTimestamp = uint64(block.timestamp);
+            return;
+        }
+        _takeFee($, tvl_);
+    }
+
     /*//////////////////////////////////////////////////////////////
                             Admin Functions
     //////////////////////////////////////////////////////////////*/

@@ -6,6 +6,7 @@ import {ERC20} from "@solmate/tokens/ERC20.sol";
 import {HyperVaultRouter} from "../src/vaults/hyperliquid/HyperVaultRouter.sol";
 import {HyperliquidEscrow} from "../src/vaults/hyperliquid/HyperliquidEscrow.sol";
 import {MintableToken} from "../src/utils/MintableToken.sol";
+import {WrappedVaultShare} from "../src/vaults/hyperliquid/WrappedVaultShare.sol";
 
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
@@ -32,15 +33,15 @@ contract DeployRouterTestnet is Script {
 
         // //// Deployment steps ////
 
-        // 1. Deploy Share Token & Mock Asset
-        MintableToken shareToken = new MintableToken("Wrapped HLP", "wHLP", 18, deployer);
+        // 1. Compute the expected address of the vault wrapper
+        address expectedRouter = LibRLP.computeAddress(deployer, vm.getNonce(deployer) + 4 + escrowCounts);
+
+        // 2. Deploy Share Token & Mock Asset
+        WrappedVaultShare shareToken = new WrappedVaultShare("Wrapped HLP", "wHLP", expectedRouter, deployer);
         console.log("wHLP deployed at", address(shareToken));
 
-        // 2. Deploy the HyperliquidEscrow via the Beacon Proxy Pattern
-        // 2(a). Compute the expected address of the vault wrapper
-        address expectedRouter = LibRLP.computeAddress(deployer, vm.getNonce(deployer) + 3 + escrowCounts);
-
-        // 2(b). Deploy Escrow Implementation Contract
+        // 3. Deploy the HyperliquidEscrow via the Beacon Proxy Pattern
+        // 3(a). Deploy Escrow Implementation Contract
         address escrowImplementation = address(
             new HyperliquidEscrow(
                 L1_VAULT, // L1 Vault
@@ -48,11 +49,11 @@ contract DeployRouterTestnet is Script {
             )
         );
 
-        // 1(c). Deploy the Beacon and set the Implementation & Owner
+        // 3(b). Deploy the Beacon and set the Implementation & Owner
         UpgradeableBeacon beacon = new UpgradeableBeacon(escrowImplementation, OWNER);
         console.log("Beacon deployed at", address(beacon));
 
-        // 1(d). Deploy all escrow proxies
+        // 3(c). Deploy all escrow proxies
         for (uint256 i = 0; i < escrowCounts; i++) {
             address escrowProxy = address(
                 new BeaconProxy(
@@ -62,12 +63,12 @@ contract DeployRouterTestnet is Script {
             escrows.push(escrowProxy);
         }
 
-        // 2. Deploy the HyperVaultRouter via the UUPS Proxy Pattern
-        // 2(a). Deploy the Implementation Contract
+        // 4. Deploy the HyperVaultRouter via the UUPS Proxy Pattern
+        // 4(a). Deploy the Implementation Contract
         address implementation = address(new HyperVaultRouter(address(shareToken)));
         console.log("Implementation deployed at", address(implementation));
 
-        // 2(b). Deploy the Proxy Contract
+        // 4(b). Deploy the Proxy Contract
         HyperVaultRouter router = HyperVaultRouter(
             address(
                 new TransparentUpgradeableProxy(
@@ -85,9 +86,9 @@ contract DeployRouterTestnet is Script {
 
         require(address(router) == expectedRouter, "Router address mismatch");
 
-        ERC20(PURR).approve(address(router), type(uint256).max);
+        //ERC20(PURR).approve(address(router), type(uint256).max);
 
-        // 3. Set minter permissions on router
+        // 5. Set minter permissions on router
         shareToken.grantRole(shareToken.MINTER_ROLE(), address(router));
 
         console.log("Router Proxy deployed at", address(router));
