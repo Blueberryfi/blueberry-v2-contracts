@@ -8,8 +8,9 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/Upgradeabl
 contract UpgradeProxy is Script {
     // --- Configuration ---
     // !!! MUST BE UPDATED with your deployed addresses !!!
-    address public constant EXISTING_BEACON_ADDRESS = 0xE274423b1d8d32C485cFC08FEbfD88247149b49d; // <--- Replace with the actual Beacon address
-    address public constant HYPERLIQUID_ROUTER_PROXY = 0x5E2f726795d08d0be9221464750Eb2149E937C71; // <--- Replace with the actual Vault Proxy address
+    address public constant EXISTING_BEACON_ADDRESS = 0x55fBa34b9b9361ceC46cB1FfE0aB883F898E9AeE; // <--- Replace with the actual Beacon address
+    address public constant HYPERLIQUID_ROUTER_PROXY = 0x5aF582D35829014339141874C08aeF04388E4Cd5; // <--- Replace with the actual Vault Proxy address
+    bytes32 internal constant BEACON_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
 
     // Constants used during original deployment - needed if constructor sets immutables
     // Ensure these match the original deployment environment if required by the *new* implementation's constructor
@@ -20,10 +21,10 @@ contract UpgradeProxy is Script {
 
     function run() public {
         // Input validation
-        require(
-            EXISTING_BEACON_ADDRESS != address(0),
-            "UpdateVaultEscrow: EXISTING_BEACON_ADDRESS cannot be zero address. Please configure the script."
-        );
+        // require(
+        //     EXISTING_BEACON_ADDRESS != address(0),
+        //     "UpdateVaultEscrow: EXISTING_BEACON_ADDRESS cannot be zero address. Please configure the script."
+        // );
         require(
             HYPERLIQUID_ROUTER_PROXY != address(0),
             "UpdateVaultEscrow: HYPER_EVM_VAULT_PROXY cannot be zero address. Please configure the script."
@@ -44,7 +45,7 @@ contract UpgradeProxy is Script {
         // Get reference to the existing beacon
         UpgradeableBeacon beacon = UpgradeableBeacon(EXISTING_BEACON_ADDRESS);
         address currentImplementation = beacon.implementation();
-        console.log("Target Beacon:", EXISTING_BEACON_ADDRESS);
+        console.log("Target Beacon:", address(beacon));
         console.log("Beacon Owner (expected):", OWNER);
         console.log("Upgrader Address (from PRIVATE_KEY):", upgrader);
         console.log("Current VaultEscrow Implementation:", currentImplementation);
@@ -95,7 +96,7 @@ contract UpgradeProxy is Script {
             "UpdateVaultEscrow: Beacon implementation address did NOT update correctly after broadcast!"
         );
 
-        console.log("VaultEscrow implementation successfully updated for Beacon:", EXISTING_BEACON_ADDRESS);
+        // console.log("VaultEscrow implementation successfully updated for Beacon:", EXISTING_BEACON_ADDRESS);
         console.log(
             "All VaultEscrow proxies pointing to this beacon will now use the new implementation at:",
             newImplementationAddress

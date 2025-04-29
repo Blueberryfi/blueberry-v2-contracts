@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 import {IHyperliquidCommon} from "@blueberry-v2/vaults/hyperliquid/interfaces/IHyperliquidCommon.sol";
 
@@ -13,6 +13,7 @@ import {IHyperliquidCommon} from "@blueberry-v2/vaults/hyperliquid/interfaces/IH
  */
 abstract contract EscrowAssetStorage is IHyperliquidCommon {
     using EnumerableSet for EnumerableSet.UintSet;
+    using SafeERC20 for IERC20;
 
     /// @custom:storage-location erc7201:asset.v1.storage
     struct V1AssetStorage {
@@ -65,9 +66,6 @@ abstract contract EscrowAssetStorage is IHyperliquidCommon {
         // Add the asset to the set of supported assets
         $.supportedAssets.add(assetIndex);
         $.assetDetails[assetIndex] = details;
-
-        // Max approve the router to transfer the asset
-        IERC20(details.evmContract).approve(ROUTER, type(uint256).max);
     }
 
     /**
@@ -92,12 +90,22 @@ abstract contract EscrowAssetStorage is IHyperliquidCommon {
         delete $.assetDetails[assetIndex];
     }
 
+    /**
+     * @notice Transfers funds from the escrow to the recipient
+     * @param asset The address of the asset to transfer
+     * @param recipient The address of the recipient
+     * @param amount The amount of funds to transfer
+     */
+    function transferFunds(address asset, address recipient, uint256 amount) external onlyRouter {
+        IERC20(asset).safeTransfer(recipient, amount);
+    }
+
     /*//////////////////////////////////////////////////////////////
                             View Functions
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IHyperliquidCommon
-    function isAssetSupported(uint64 assetIndex) external view override returns (bool) {
+    function isAssetSupported(uint64 assetIndex) public view override returns (bool) {
         V1AssetStorage storage $ = _getV1AssetStorage();
         return $.supportedAssets.contains(assetIndex);
     }

@@ -155,7 +155,7 @@ contract HyperliquidEscrow is IHyperliquidEscrow, L1EscrowActions {
         require(success, Errors.PRECOMPILE_CALL_FAILED());
 
         UserVaultEquity memory userVaultEquity = abi.decode(result, (UserVaultEquity));
-        uint256 equityInSpot = _scaleToSpotDecimals(userVaultEquity.equity, USDC_SPOT_INDEX);
+        uint256 equityInSpot = _scaleToSpotDecimals(userVaultEquity.equity);
 
         return (uint64(equityInSpot), userVaultEquity.lockedUntilTimestamp);
     }
@@ -166,11 +166,18 @@ contract HyperliquidEscrow is IHyperliquidEscrow, L1EscrowActions {
      * @return The spot balance for the specified asset
      */
     function _spotAssetBalance(uint64 token) internal view override returns (uint256) {
+        V1AssetStorage storage $ = _getV1AssetStorage();
         (bool success, bytes memory result) =
             SPOT_BALANCE_PRECOMPILE_ADDRESS.staticcall(abi.encode(address(this), token));
         require(success, Errors.PRECOMPILE_CALL_FAILED());
         SpotBalance memory balance = abi.decode(result, (SpotBalance));
-        return balance.total * USDC_SPOT_SCALING;
+
+        if (token == USDC_SPOT_INDEX) {
+            return balance.total * USDC_SPOT_SCALING;
+        }
+
+        uint256 scaler = 10 ** (18 - $.assetDetails[token].weiDecimals);
+        return balance.total * scaler;
     }
 
     /**
@@ -178,20 +185,9 @@ contract HyperliquidEscrow is IHyperliquidEscrow, L1EscrowActions {
      * @param amount_ The amount to scale.
      * @return The amount scaled to spot/evm decimals.
      */
-    function _scaleToSpotDecimals(uint64 amount_, uint64 token) internal pure returns (uint64) {
-        uint8 perpDecimals;
-        uint8 spotDecimals;
-
-        if (token == USDC_SPOT_INDEX) {
-            perpDecimals = USDC_PERP_DECIMALS;
-            spotDecimals = USDC_SPOT_DECIMALS;
-        } else {
-            // Handle other tokens here
-            revert("Unsupported token");
-        }
-
-        return (perpDecimals > spotDecimals)
-            ? uint64(amount_ / (10 ** (perpDecimals - spotDecimals)))
-            : uint64(amount_ * (10 ** (spotDecimals - perpDecimals)));
+    function _scaleToSpotDecimals(uint64 amount_) internal pure returns (uint64) {
+        return (USDC_PERP_DECIMALS > USDC_SPOT_DECIMALS)
+            ? uint64(amount_ / (10 ** (USDC_PERP_DECIMALS - USDC_SPOT_DECIMALS)))
+            : uint64(amount_ * (10 ** (USDC_SPOT_DECIMALS - USDC_PERP_DECIMALS)));
     }
 }

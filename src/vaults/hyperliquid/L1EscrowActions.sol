@@ -2,25 +2,34 @@
 pragma solidity 0.8.28;
 
 import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
-import {IL1Write} from "@blueberry-v2/vaults/hyperliquid/interfaces/IL1Write.sol";
-import {EscrowAssetStorage} from "@blueberry-v2/vaults/hyperliquid/EscrowAssetStorage.sol";
 
+import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
+
+import {EscrowAssetStorage} from "@blueberry-v2/vaults/hyperliquid/EscrowAssetStorage.sol";
+import {IL1Write} from "@blueberry-v2/vaults/hyperliquid/interfaces/IL1Write.sol";
+
+/**
+ * @title L1EscrowActions
+ * @author Blueberry
+ * @notice This contract contains the admin logic for
+ */
 abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeable {
+    using EnumerableSet for EnumerableSet.UintSet;
     using SafeERC20 for IERC20;
+
     /*//////////////////////////////////////////////////////////////
                                 Storage
     //////////////////////////////////////////////////////////////*/
     /// @custom:storage-location erc7201:l1.escrow.actions.v1.storage
-
     struct V1L1EscrowActionsStorage {
         /// @notice Last block number that an admin action was performed
         uint256 lastAdminActionBlock;
     }
 
     /*//////////////////////////////////////////////////////////////
-                            Constants
+                                Constants
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The L1 vault address that is being tokenized
@@ -33,6 +42,12 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
 
     /*==== Additional Constants ====*/
 
+    /// @notice Spot market indexes start at index 10000
+    uint32 public constant SPOT_MARKET_INDEX_OFFSET = 10000;
+
+    /// @notice The role that is granted to the admin who can direct the escrows liquidity
+    bytes32 public constant LIQUIDITY_ADMIN_ROLE = keccak256("LIQUIDITY_ADMIN_ROLE");
+
     /// @notice The location for the vault escrow storage
     bytes32 public constant V1_L1_ESCROW_ACTIONS_STORAGE_LOCATION =
         keccak256(abi.encode(uint256(keccak256(bytes("l1.escrow.actions.v1.storage"))) - 1)) & ~bytes32(uint256(0xff));
@@ -41,6 +56,9 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
                             Modifiers
     //////////////////////////////////////////////////////////////*/
 
+    // This modifier prevents contract admins from interacting with the contract multiple
+    //     times within a single evm block. This is to protect from the lag time in contract
+    //     state that occurs between L1 on Hyperliquid Core.
     modifier singleActionBlock() {
         V1L1EscrowActionsStorage storage $ = _getV1L1EscrowActionsStorage();
         require(block.number > $.lastAdminActionBlock, Errors.TOO_FREQUENT_ACTIONS());
@@ -63,7 +81,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      */
     function bridgeToL1(uint64[] memory assetIndexes, uint256[] memory amounts)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyRole(LIQUIDITY_ADMIN_ROLE)
         singleActionBlock
     {
         V1AssetStorage storage $ = _getV1AssetStorage();
@@ -72,6 +90,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
 
         for (uint256 i = 0; i < len; i++) {
             AssetDetails memory details = $.assetDetails[assetIndexes[i]];
+            require(details.evmContract != address(0), Errors.ADDRESS_ZERO());
             IERC20(details.evmContract).transfer(_assetSystemAddr(assetIndexes[i]), amounts[i]);
         }
     }
@@ -83,7 +102,8 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      * @param assetIndex The index of the asset to bridge
      * @param amount The amount of the assets to pull
      */
-    function bridgeFromL1(uint64 assetIndex, uint64 amount) external onlyRole(DEFAULT_ADMIN_ROLE) singleActionBlock {
+    function bridgeFromL1(uint64 assetIndex, uint64 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
+        require(isAssetSupported(assetIndex), Errors.COLLATERAL_NOT_SUPPORTED());
         L1_WRITE_PRECOMPILE.sendSpot(_assetSystemAddr(assetIndex), assetIndex, amount);
     }
 
@@ -98,10 +118,13 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      */
     function trade(uint32 assetIndex, bool isBuy, uint64 limitPx, uint64 sz)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyRole(LIQUIDITY_ADMIN_ROLE)
         singleActionBlock
     {
-        L1_WRITE_PRECOMPILE.sendIocOrder(assetIndex, isBuy, limitPx, sz);
+        V1AssetStorage storage $ = _getV1AssetStorage();
+        require($.supportedAssets.contains(assetIndex), Errors.COLLATERAL_NOT_SUPPORTED());
+        uint32 iocIndex = SPOT_MARKET_INDEX_OFFSET + $.assetDetails[assetIndex].spotMarket;
+        L1_WRITE_PRECOMPILE.sendIocOrder(iocIndex, isBuy, limitPx, sz);
     }
 
     /**
@@ -110,7 +133,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      *      so any failures can simply be retried with different parameters.
      * @param amount The amount of USDC in spot to transfer
      */
-    function spotToPerps(uint64 amount) external onlyRole(DEFAULT_ADMIN_ROLE) singleActionBlock {
+    function spotToPerps(uint64 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
         L1_WRITE_PRECOMPILE.sendUsdClassTransfer(amount, true);
     }
 
@@ -120,7 +143,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      *      so any failures can simply be retried with different parameters.
      * @param amount The amount of USDC in perps to transfer
      */
-    function perpsToSpot(uint64 amount) external onlyRole(DEFAULT_ADMIN_ROLE) singleActionBlock {
+    function perpsToSpot(uint64 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
         L1_WRITE_PRECOMPILE.sendUsdClassTransfer(amount, false);
     }
 
@@ -130,7 +153,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      *      so any failures can simply be retried with different parameters.
      * @param amount The amount of USDC in perps to deposit
      */
-    function vaultDeposit(uint64 amount) external onlyRole(DEFAULT_ADMIN_ROLE) singleActionBlock {
+    function vaultDeposit(uint64 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
         L1_WRITE_PRECOMPILE.sendVaultTransfer(L1_VAULT, true, amount);
     }
 
@@ -140,7 +163,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      *      so any failures can simply be retried with different parameters.
      * @param amount The amount of USDC in perps to withdraw
      */
-    function vaultWithdraw(uint64 amount) external onlyRole(DEFAULT_ADMIN_ROLE) singleActionBlock {
+    function vaultWithdraw(uint64 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
         L1_WRITE_PRECOMPILE.sendVaultTransfer(L1_VAULT, false, amount);
     }
 
@@ -148,6 +171,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
                             View Functions
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Returns the last block number that a LIQUIDITY_ADMIN_ROLE action was performed
     function lastAdminActionBlock() public view returns (uint256) {
         V1L1EscrowActionsStorage storage $ = _getV1L1EscrowActionsStorage();
         return $.lastAdminActionBlock;

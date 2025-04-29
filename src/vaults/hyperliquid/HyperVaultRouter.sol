@@ -147,6 +147,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
             uint256 tvl_ = tvl();
             _takeFee($, tvl_);
             shares = usdValue.mulDivDown(_shareSupply(), tvl_);
+            require(shares > 0, Errors.ZERO_SHARES());
         }
 
         emit Deposit(msg.sender, asset, amount, shares);
@@ -313,11 +314,11 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         for (uint256 i = 0; i < len; ++i) {
             address currentEscrow = $.escrows[i];
             uint256 escrowBalance = IERC20($.withdrawAsset).balanceOf(currentEscrow);
-            uint256 transferAmount = Math.min(amount, escrowBalance);
+            uint256 transferAmount = Math.min(remaining, escrowBalance);
 
             if (transferAmount > 0) {
                 // Transfer the withdraw asset from the escrow to the user
-                IERC20($.withdrawAsset).safeTransferFrom(currentEscrow, msg.sender, transferAmount);
+                HyperliquidEscrow(currentEscrow).transferFunds($.withdrawAsset, msg.sender, transferAmount);
                 remaining -= transferAmount;
             }
             if (remaining == 0) break;
@@ -359,6 +360,12 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
      */
     function _previewFeeShares(V1Storage storage $, uint256 tvl_) internal view returns (uint256) {
         uint256 expectedFee = _calculateFee($, tvl_);
+
+        // In the event of both EXTREME vault inactivity & high fees we need to make sure the fee doesnt underflow
+        if (expectedFee >= tvl_) {
+            expectedFee = tvl_ / 2;
+        }
+
         return expectedFee.mulDivUp(_shareSupply(), tvl_ - expectedFee);
     }
 

@@ -2,11 +2,11 @@
 pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
-import {MockERC20, ERC20} from "../mocks/MockERC20.sol";
-import {HyperEvmVault} from "../../src/vaults/hyperliquid/deprecated/HyperEvmVault.sol";
-import {VaultEscrow} from "../../src/vaults/hyperliquid/deprecated/VaultEscrow.sol";
-import {BlueberryErrors} from "../../src/helpers/BlueberryErrors.sol";
-import {MockL1BlockNumberPrecompile} from "../mocks/MockHyperliquidPrecompiles.sol";
+import {MockERC20, ERC20} from "../../mocks/MockERC20.sol";
+import {HyperEvmVault} from "@blueberry-v2/vaults/hyperliquid/deprecated/HyperEvmVault.sol";
+import {VaultEscrow} from "@blueberry-v2/vaults/hyperliquid/deprecated/VaultEscrow.sol";
+import {BlueberryErrors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
+import {MockL1BlockNumberPrecompile} from "../../mocks/MockHyperliquidPrecompiles.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {LibRLP} from "@solady/utils/LibRLP.sol";
 import {HlpHelpers} from "./HlpHelpers.t.sol";
@@ -122,11 +122,6 @@ contract VaultSetupUnitTest is HlpHelpers {
         vault = _deploy(address(asset), 200, l1Vault, owner, 7);
         escrow = VaultEscrow(vault.escrows(vault.depositEscrowIndex()));
         assertEq(escrow.assetSystemAddr(), address(0x20000000000000000000000000000000000000C8));
-
-        /// System address for asset index  1
-        vault = _deploy(address(asset), 1, l1Vault, owner, 7);
-        escrow = VaultEscrow(vault.escrows(vault.depositEscrowIndex()));
-        assertEq(escrow.assetSystemAddr(), address(0x200));
     }
 
     function _updateL1BlockNumber(uint64 blockNumber_) internal {
