@@ -11,7 +11,7 @@ import {FixedPointMathLib as FpMath} from "@solmate/utils/FixedPointMathLib.sol"
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 
-import {MintableToken} from "@blueberry-v2/utils/MintableToken.sol";
+import {WrappedVaultShare} from "@blueberry-v2//vaults/hyperliquid/WrappedVaultShare.sol";
 import {HyperliquidEscrow} from "@blueberry-v2/vaults/hyperliquid/HyperliquidEscrow.sol";
 import {IHyperVaultRouter} from "@blueberry-v2/vaults/hyperliquid/interfaces/IHyperVaultRouter.sol";
 import {IHyperliquidEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/IHyperliquidEscrow.sol";
@@ -154,7 +154,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         // Transfer the asset to the escrow contract and mint shares to user
         IERC20(asset).safeTransferFrom(msg.sender, address(escrow), amount);
-        MintableToken(SHARE_TOKEN).mint(msg.sender, shares);
+        WrappedVaultShare(SHARE_TOKEN).mint(msg.sender, shares);
     }
 
     /// @inheritdoc IHyperVaultRouter
@@ -181,7 +181,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         emit Redeem(msg.sender, shares, amount);
 
         // Burn the shares from the user and transfer the withdraw asset to the user
-        MintableToken(SHARE_TOKEN).burnFrom(msg.sender, shares);
+        WrappedVaultShare(SHARE_TOKEN).burnFrom(msg.sender, shares);
         _transferAssetsToUser($, amount);
     }
 
@@ -355,7 +355,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         $.lastFeeCollectionTimestamp = uint64(block.timestamp);
 
         if (sharesToMint > 0) {
-            MintableToken(SHARE_TOKEN).mint($.feeRecipient, sharesToMint);
+            WrappedVaultShare(SHARE_TOKEN).mint($.feeRecipient, sharesToMint);
         }
     }
 
