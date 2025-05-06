@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 
 import {MintableToken} from "@blueberry-v2/utils/MintableToken.sol";
+import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 import {HyperliquidEscrow} from "@blueberry-v2/vaults/hyperliquid/HyperliquidEscrow.sol";
 import {HyperVaultRouter} from "@blueberry-v2/vaults/hyperliquid/HyperVaultRouter.sol";
 
@@ -22,7 +23,13 @@ contract WrappedVaultShare is MintableToken {
     constructor(string memory name, string memory symbol, address router, address admin)
         MintableToken(name, symbol, 18, admin)
     {
-        router = ROUTER;
+        require(router != address(0), Errors.ADDRESS_ZERO());
+        ROUTER = router;
+
+        // Grant the minter and burner roles to the router so it can
+        //     mint and burn share tokens during deposits and redemptions
+        _grantRole(MINTER_ROLE, router);
+        _grantRole(BURNER_ROLE, router);
     }
 
     /// @notice Calls the pokeFees functions on the router contract before any transfer
