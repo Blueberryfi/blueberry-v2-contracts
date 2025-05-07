@@ -91,7 +91,14 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
         for (uint256 i = 0; i < len; i++) {
             AssetDetails memory details = $.assetDetails[assetIndexes[i]];
             require(details.evmContract != address(0), Errors.ADDRESS_ZERO());
-            IERC20(details.evmContract).transfer(_assetSystemAddr(assetIndexes[i]), amounts[i]);
+
+            // Sanitize the amount to the correct spot decimals so that we dont lose small amounts in the
+            //     bridging process.
+            uint256 factor =
+                (details.evmDecimals > details.weiDecimals) ? 10 ** (details.evmDecimals - details.weiDecimals) : 1;
+
+            uint256 amountAdjusted = amounts[i] - (amounts[i] % factor);
+            IERC20(details.evmContract).transfer(_assetSystemAddr(assetIndexes[i]), amountAdjusted);
         }
     }
 
