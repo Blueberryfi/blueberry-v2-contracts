@@ -433,12 +433,10 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         require(success, Errors.PRECOMPILE_CALL_FAILED());
         SpotInfo memory spotInfo = abi.decode(result, (SpotInfo));
 
-        for (uint256 i = 0; i < 2; i++) {
-            if (spotInfo.tokens[i] == USDC_SPOT_INDEX || spotInfo.tokens[i] == assetIndex_) {
-                return true;
-            }
-        }
-        return false;
+        return (
+            (spotInfo.tokens[0] == assetIndex_ && spotInfo.tokens[1] == USDC_SPOT_INDEX)
+                || (spotInfo.tokens[1] == assetIndex_ && spotInfo.tokens[0] == USDC_SPOT_INDEX)
+        );
     }
 
     /*//////////////////////////////////////////////////////////////
