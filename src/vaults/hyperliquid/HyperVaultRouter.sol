@@ -140,8 +140,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         // Get the USD value of the asset to properly calculate shares to mint
         uint256 scaler = 10 ** (18 - details.evmDecimals);
-        uint256 rate =
-            (assetIndex_ == USDC_EVM_SPOT_INDEX) ? 1e18 : escrow.getRate(details.spotMarket, details.szDecimals);
+        uint256 rate = _getRate(address(escrow), assetIndex_, details);
         uint256 usdValue = rate.mulWadDown(amount * scaler);
         require(usdValue >= $.minDepositValue, Errors.MIN_DEPOSIT_AMOUNT());
 
@@ -179,8 +178,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         // Convert the USD amount to withdraw to the withdraw asset amount
         HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
         uint256 scaler = 10 ** (18 - details.evmDecimals);
-        uint256 rate =
-            (assetIndex_ == USDC_EVM_SPOT_INDEX) ? 1e18 : escrow.getRate(details.spotMarket, details.szDecimals);
+        uint256 rate = _getRate(address(escrow), assetIndex_, details);
         amount = usdAmount.divWadDown(rate * scaler);
         require(amount > 0, Errors.AMOUNT_ZERO());
 
@@ -328,6 +326,22 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     /*//////////////////////////////////////////////////////////////
                             Internal Functions
     //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Returns the rate for a specific asset scaled to 1e18
+     * @param escrow Address of the escrow contract
+     * @param assetIndex_ Spot index of the asset
+     * @param details Asset details struct containing the asset's information
+     * @return The rate for the asset scaled to 1e18
+     */
+    function _getRate(address escrow, uint256 assetIndex_, AssetDetails memory details)
+        internal
+        view
+        returns (uint256)
+    {
+        HyperliquidEscrow escrow_ = HyperliquidEscrow(escrow);
+        return (assetIndex_ == USDC_EVM_SPOT_INDEX) ? 1e18 : escrow_.getRate(details.spotMarket, details.szDecimals);
+    }
 
     /**
      * @notice Transfers the withdraw asset from the escrows to the user
@@ -480,8 +494,20 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
     /// @notice IHyperVaultRouter
     function maxRedeemable() external view override returns (uint256) {
+        V1Storage storage $ = _getV1Storage();
+        uint64 assetIndex_ = $.assetIndexes[$.withdrawAsset];
+        AssetDetails memory details = $.assetDetails[assetIndex_];
+
+        // Convert the USD amount to withdraw to the withdraw asset amount
+        HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
+        uint256 scaler = 10 ** (18 - details.evmDecimals);
+        uint256 rate = _getRate(address(escrow), assetIndex_, details);
         uint256 maxWithdraw = maxWithdrawable();
-        return maxWithdraw.mulDivDown(_shareSupply(), tvl());
+        if (maxWithdraw == 0) return 0;
+
+        // Calculate the max redeemable amount based on the USD value of the withdraw asset
+        uint256 usdValue = maxWithdraw.mulWadDown(rate * scaler);
+        return usdValue.mulDivDown(_shareSupply(), tvl());
     }
 
     /// @inheritdoc IHyperVaultRouter
