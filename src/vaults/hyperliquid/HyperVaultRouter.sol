@@ -178,12 +178,10 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         // Convert the USD amount to withdraw to the withdraw asset amount
         HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
-
+        uint256 scaler = 10 ** (18 - details.evmDecimals);
         uint256 rate =
             (assetIndex_ == USDC_EVM_SPOT_INDEX) ? 1e18 : escrow.getRate(details.spotMarket, details.szDecimals);
-        amount = rate.mulWadDown(usdAmount);
-        uint256 scaler = 10 ** (18 - details.evmDecimals);
-        amount = amount / scaler;
+        amount = usdAmount.divWadDown(rate * scaler);
         require(amount > 0, Errors.AMOUNT_ZERO());
 
         emit Redeem(msg.sender, shares, amount);
