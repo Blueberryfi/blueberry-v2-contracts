@@ -140,7 +140,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         // Get the USD value of the asset to properly calculate shares to mint
         uint256 scaler = 10 ** (18 - details.evmDecimals);
-        uint256 rate = (assetIndex_ == USDC_EVM_SPOT_INDEX) ? 1e18 : escrow.getRate(details.spotMarket);
+        uint256 rate =
+            (assetIndex_ == USDC_EVM_SPOT_INDEX) ? 1e18 : escrow.getRate(details.spotMarket, details.szDecimals);
         uint256 usdValue = rate.mulWadDown(amount * scaler);
         require(usdValue >= $.minDepositValue, Errors.MIN_DEPOSIT_AMOUNT());
 
@@ -178,7 +179,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         // Convert the USD amount to withdraw to the withdraw asset amount
         HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
 
-        uint256 rate = (assetIndex_ == USDC_EVM_SPOT_INDEX) ? 1e18 : escrow.getRate(details.spotMarket);
+        uint256 rate =
+            (assetIndex_ == USDC_EVM_SPOT_INDEX) ? 1e18 : escrow.getRate(details.spotMarket, details.szDecimals);
         amount = rate.mulWadDown(usdAmount);
         uint256 scaler = 10 ** (18 - details.evmDecimals);
         amount = amount / scaler;

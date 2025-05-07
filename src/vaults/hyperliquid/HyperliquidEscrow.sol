@@ -103,7 +103,7 @@ contract HyperliquidEscrow is IHyperliquidEscrow, L1EscrowActions {
                 // If the asset is USDC we only need to get the contract balance since we already queried the spot balance
                 tvl_ += IERC20(assetAddr).balanceOf(address(this)) * evmScaling;
             } else {
-                uint256 rate = getRate(details.spotMarket);
+                uint256 rate = getRate(details.spotMarket, details.szDecimals);
                 uint256 balance = IERC20(assetAddr).balanceOf(address(this)) * evmScaling;
                 balance += _spotAssetBalance(uint64(assetIndex));
                 tvl_ += balance.mulWadDown(rate);
@@ -137,10 +137,10 @@ contract HyperliquidEscrow is IHyperliquidEscrow, L1EscrowActions {
     }
 
     /// @inheritdoc IHyperliquidEscrow
-    function getRate(uint32 spotMarket) public view override returns (uint256) {
+    function getRate(uint32 spotMarket, uint8 szDecimals) public view override returns (uint256) {
         (bool success, bytes memory result) = SPOT_PX_PRECOMPILE_ADDRESS.staticcall(abi.encode(spotMarket));
         require(success, Errors.PRECOMPILE_CALL_FAILED());
-        uint256 scaledRate = uint256(abi.decode(result, (uint64))) * USDC_SPOT_SCALING;
+        uint256 scaledRate = uint256(abi.decode(result, (uint64))) * USDC_SPOT_SCALING * (10 ** szDecimals);
         return scaledRate;
     }
 
