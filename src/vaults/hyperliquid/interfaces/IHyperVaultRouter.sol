@@ -34,16 +34,18 @@ interface IHyperVaultRouter is IHyperliquidCommon {
      * @notice Deposit an asset into the escrows and mint shares of the tokenized vault
      * @param asset The address of the asset to deposit
      * @param amount The amount of asset to deposit
+     * @param minOut The minimum amount of shares to mint
      * @return shares The amount of shares minted to the user
      */
-    function deposit(address asset, uint256 amount) external returns (uint256 shares);
+    function deposit(address asset, uint256 amount, uint256 minOut) external returns (uint256 shares);
 
     /**
      * @notice Redeems shares for the withdraw asset
      * @param shares The amount of shares to redeem
+     * @param minOut The minimum amount of withdraw asset to receive
      * @return amount The amount of withdraw asset received
      */
-    function redeem(uint256 shares) external returns (uint256 amount);
+    function redeem(uint256 shares, uint256 minOut) external returns (uint256 amount);
 
     /*//////////////////////////////////////////////////////////////
                             View Functions  
