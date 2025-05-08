@@ -518,6 +518,49 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         return usdValue.mulDivDown(_shareSupply(), tvl());
     }
 
+    function previewDeposit(address asset, uint256 amount) external view returns (uint256 shares) {
+        V1Storage storage $ = _getV1Storage();
+        HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
+
+        uint64 assetIndex_ = $.assetIndexes[asset];
+        require(_isAssetSupported($, assetIndex_), Errors.COLLATERAL_NOT_SUPPORTED());
+        AssetDetails memory details = $.assetDetails[assetIndex_];
+        require(details.evmContract == asset, Errors.INVALID_EVM_ADDRESS());
+
+        // Get the USD value of the asset to properly calculate shares to mint
+        uint256 scaler = 10 ** (18 - details.evmDecimals);
+        uint256 rate = _getRate(address(escrow), assetIndex_, details);
+        uint256 usdValue = rate.mulWadDown(amount * scaler);
+
+        if (_shareSupply() == 0) {
+            shares = usdValue;
+        } else {
+            uint256 tvl_ = tvl();
+            uint256 feeShares = _previewFeeShares($, tvl_);
+            shares = usdValue.mulDivDown(_shareSupply() + feeShares, tvl_);
+        }
+    }
+
+    function previewRedeem(uint256 shares) external view returns (uint256 amount) {
+        V1Storage storage $ = _getV1Storage();
+        require(shares > 0, Errors.ZERO_SHARES());
+        require($.withdrawAsset != address(0), Errors.ADDRESS_ZERO());
+
+        uint256 tvl_ = tvl();
+        uint256 feeShares = _previewFeeShares($, tvl_);
+        uint256 usdAmount = (shares + feeShares).mulDivDown(tvl_, _shareSupply());
+
+        // Get amount of withdraw asset from escrow
+        uint64 assetIndex_ = $.assetIndexes[$.withdrawAsset];
+        AssetDetails memory details = $.assetDetails[assetIndex_];
+
+        // Convert the USD amount to withdraw to the withdraw asset amount
+        HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
+        uint256 scaler = 10 ** (18 - details.evmDecimals);
+        uint256 rate = _getRate(address(escrow), assetIndex_, details);
+        amount = usdAmount.divWadDown(rate * scaler);
+    }
+
     /// @inheritdoc IHyperVaultRouter
     function assetIndex(address asset) external view override returns (uint64) {
         V1Storage storage $ = _getV1Storage();
