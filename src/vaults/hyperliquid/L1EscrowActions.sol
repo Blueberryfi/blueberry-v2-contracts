@@ -26,6 +26,10 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
     struct V1L1EscrowActionsStorage {
         /// @notice Last block number that an admin action was performed
         uint256 lastAdminActionBlock;
+        /// @notice The last block number where a bridge to L1 was performed
+        uint64 lastBridgeToL1Block;
+        /// @notice A mapping of asset indexes to their corresponding in-flight bridge amounts
+        mapping(uint64 => uint256) inFlightBridgeAmounts;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -39,6 +43,9 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
 
     /// @notice The address of the write precompile, used for sending transactions to the L1.
     IL1Write public constant L1_WRITE_PRECOMPILE = IL1Write(0x3333333333333333333333333333333333333333);
+
+    /// @notice The address of the L1 block number precompile, used for querying the L1 block number.
+    address public constant L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS = 0x0000000000000000000000000000000000000809;
 
     /*==== Additional Constants ====*/
 
@@ -76,30 +83,35 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
 
     /**
      * @notice Bridge assets to the escrows L1 spot account
-     * @param assetIndexes The indexes of the assets to bridge
-     * @param amounts The amounts of the assets to bridge
+     * @param assetIndex The index of the assets to bridge
+     * @param amount The amounts of the assets to bridge
      */
-    function bridgeToL1(uint64[] memory assetIndexes, uint256[] memory amounts)
-        external
-        onlyRole(LIQUIDITY_ADMIN_ROLE)
-        singleActionBlock
-    {
+    function bridgeToL1(uint64 assetIndex, uint256 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
         V1AssetStorage storage $ = _getV1AssetStorage();
-        uint256 len = assetIndexes.length;
-        require(len == amounts.length, Errors.MISMATCHED_LENGTH());
+        V1L1EscrowActionsStorage storage $$ = _getV1L1EscrowActionsStorage();
 
-        for (uint256 i = 0; i < len; i++) {
-            AssetDetails memory details = $.assetDetails[assetIndexes[i]];
-            require(details.evmContract != address(0), Errors.ADDRESS_ZERO());
+        AssetDetails memory details = $.assetDetails[assetIndex];
+        require(details.evmContract != address(0), Errors.ADDRESS_ZERO());
 
-            // Sanitize the amount to the correct spot decimals so that we dont lose small amounts in the
-            //     bridging process.
-            uint256 factor =
-                (details.evmDecimals > details.weiDecimals) ? 10 ** (details.evmDecimals - details.weiDecimals) : 1;
+        // Sanitize the amount to the correct spot decimals so that we dont lose small amounts in the
+        //     bridging process.
+        uint256 factor =
+            (details.evmDecimals > details.weiDecimals) ? 10 ** (details.evmDecimals - details.weiDecimals) : 1;
 
-            uint256 amountAdjusted = amounts[i] - (amounts[i] % factor);
-            IERC20(details.evmContract).transfer(_assetSystemAddr(assetIndexes[i]), amountAdjusted);
+        uint256 amountAdjusted = amount - (amount % factor);
+        IERC20(details.evmContract).transfer(_assetSystemAddr(assetIndex), amountAdjusted);
+
+        // Update the in-flight bridge amounts; if the last bridge to L1 was in a different block, reset the in-flight amount
+        //     to the new amount, otherwise add the new amount to the existing in-flight amount.
+        uint64 l1Block_ = l1Block();
+        if (l1Block_ != $$.lastBridgeToL1Block) {
+            $$.inFlightBridgeAmounts[assetIndex] = amountAdjusted;
+        } else {
+            $$.inFlightBridgeAmounts[assetIndex] += amountAdjusted;
         }
+
+        // Update the last bridge to L1 block
+        $$.lastBridgeToL1Block = l1Block_;
     }
 
     /**
@@ -182,6 +194,13 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
     function lastAdminActionBlock() public view returns (uint256) {
         V1L1EscrowActionsStorage storage $ = _getV1L1EscrowActionsStorage();
         return $.lastAdminActionBlock;
+    }
+
+    /// @dev Returns the current L1 block number.
+    function l1Block() public view returns (uint64) {
+        (bool success, bytes memory data) = L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS.staticcall(abi.encode());
+        require(success, Errors.STATICCALL_FAILED());
+        return abi.decode(data, (uint64));
     }
 
     /*//////////////////////////////////////////////////////////////
