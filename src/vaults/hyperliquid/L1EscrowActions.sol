@@ -27,7 +27,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
         /// @notice Last block number that an admin action was performed
         uint256 lastAdminActionBlock;
         /// @notice The last block number where a bridge to L1 was performed
-        uint64 lastBridgeToL1Block;
+        uint256 lastBridgeToL1Block;
         /// @notice A mapping of asset indexes to their corresponding in-flight bridge amounts
         mapping(uint64 => uint256) inFlightBridgeAmounts;
     }
@@ -43,9 +43,6 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
 
     /// @notice The address of the write precompile, used for sending transactions to the L1.
     IL1Write public constant L1_WRITE_PRECOMPILE = IL1Write(0x3333333333333333333333333333333333333333);
-
-    /// @notice The address of the L1 block number precompile, used for querying the L1 block number.
-    address public constant L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS = 0x0000000000000000000000000000000000000809;
 
     /*==== Additional Constants ====*/
 
@@ -103,15 +100,15 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
 
         // Update the in-flight bridge amounts; if the last bridge to L1 was in a different block, reset the in-flight amount
         //     to the new amount, otherwise add the new amount to the existing in-flight amount.
-        uint64 l1Block_ = l1Block();
-        if (l1Block_ != $$.lastBridgeToL1Block) {
+        uint256 evmBlock = block.number;
+        if (evmBlock != $$.lastBridgeToL1Block) {
             $$.inFlightBridgeAmounts[assetIndex] = amountAdjusted;
         } else {
             $$.inFlightBridgeAmounts[assetIndex] += amountAdjusted;
         }
 
         // Update the last bridge to L1 block
-        $$.lastBridgeToL1Block = l1Block_;
+        $$.lastBridgeToL1Block = evmBlock;
     }
 
     /**
@@ -194,13 +191,6 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
     function lastAdminActionBlock() public view returns (uint256) {
         V1L1EscrowActionsStorage storage $ = _getV1L1EscrowActionsStorage();
         return $.lastAdminActionBlock;
-    }
-
-    /// @dev Returns the current L1 block number.
-    function l1Block() public view returns (uint64) {
-        (bool success, bytes memory data) = L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS.staticcall(abi.encode());
-        require(success, Errors.STATICCALL_FAILED());
-        return abi.decode(data, (uint64));
     }
 
     /*//////////////////////////////////////////////////////////////
