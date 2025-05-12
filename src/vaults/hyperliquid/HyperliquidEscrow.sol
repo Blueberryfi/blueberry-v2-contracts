@@ -107,9 +107,10 @@ contract HyperliquidEscrow is IHyperliquidEscrow, L1EscrowActions {
                 uint256 rate = getRate(details.spotMarket, details.szDecimals);
                 uint256 balance = IERC20(assetAddr).balanceOf(address(this)) * evmScaling;
 
+                uint256 lastBridgeToL1Block = $$.inFlightBridge[assetIndex].blockNumber;
                 // If we are still in the L1 bridge period (same EVM block as last bridge action took place), we need to add the in-flight bridge amounts
-                if (block.number == $$.lastBridgeToL1Block) {
-                    balance += $$.inFlightBridgeAmounts[assetIndex] * evmScaling;
+                if (block.number == lastBridgeToL1Block) {
+                    balance += $$.inFlightBridge[assetIndex].amount * evmScaling;
                 }
 
                 balance += _spotAssetBalance(uint64(assetIndex));
