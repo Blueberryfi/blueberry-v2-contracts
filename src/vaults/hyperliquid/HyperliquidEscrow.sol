@@ -186,8 +186,6 @@ contract HyperliquidEscrow is IHyperliquidEscrow, L1EscrowActions {
      * @return The amount scaled to spot/evm decimals.
      */
     function _scaleToSpotDecimals(uint64 amount_) internal pure returns (uint64) {
-        return (USDC_PERP_DECIMALS > USDC_SPOT_DECIMALS)
-            ? uint64(amount_ / (10 ** (USDC_PERP_DECIMALS - USDC_SPOT_DECIMALS)))
-            : uint64(amount_ * (10 ** (USDC_SPOT_DECIMALS - USDC_PERP_DECIMALS)));
+        return uint64(amount_ * (10 ** (USDC_SPOT_DECIMALS - USDC_PERP_DECIMALS)));
     }
 }
