@@ -285,11 +285,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         V1Storage storage $ = _getV1Storage();
         uint64 assetIndex_ = $.assetIndexes[asset];
 
-        // If the asset is the withdraw asset, set it to 0. This will prevent future withdraws until
-        //     a new withdraw asset is set
-        if (asset == $.withdrawAsset) {
-            $.withdrawAsset = address(0);
-        }
+        // Withdraw asset cannot be set to address(0) once it is set
+        require(asset != $.withdrawAsset, Errors.INVALID_OPERATION());
         delete $.assetIndexes[asset];
         delete $.assetDetails[assetIndex_];
         $.supportedAssets.remove(assetIndex_);
