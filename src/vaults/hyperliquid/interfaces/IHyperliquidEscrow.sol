@@ -77,34 +77,4 @@ interface IHyperliquidEscrow is IHyperliquidCommon {
      * @return The exchange rate in USD with 18 decimals
      */
     function getRate(uint32 spotMarket, uint8 szDecimals) external view returns (uint256);
-
-    // /**
-    //  * @notice The L1 address of the vault
-    //  * @return The L1 vault address
-    //  */
-    // function L1_VAULT() external view returns (address);
-
-    // /**
-    //  * @notice The address of the manager
-    //  * @return The manager address
-    //  */
-    // function ROUTER() external view returns (address);
-
-    // /**
-    //  * @notice USDC perp decimals constant
-    //  * @return The USDC perp decimals
-    //  */
-    // function USDC_PERP_DECIMALS() external pure returns (uint8);
-
-    // /**
-    //  * @notice USDC spot decimals constant
-    //  * @return The USDC spot decimals
-    //  */
-    // function USDC_SPOT_DECIMALS() external pure returns (uint8);
-
-    // /**
-    //  * @notice USDC spot index constant
-    //  * @return The USDC spot index
-    //  */
-    // function USDC_SPOT_INDEX() external pure returns (uint64);
 }

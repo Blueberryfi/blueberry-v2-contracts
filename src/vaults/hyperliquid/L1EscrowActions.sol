@@ -20,12 +20,25 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
+                                Structs
+    //////////////////////////////////////////////////////////////*/
+    /// @notice Struct that contains details on the last time an asset was bridged to L1
+    struct InflightBridge {
+        /// @notice The evm block number that the asset was sent to L1
+        uint64 blockNumber;
+        /// @notice The amount of the asset that is in-flight to L1
+        uint256 amount;
+    }
+
+    /*//////////////////////////////////////////////////////////////
                                 Storage
     //////////////////////////////////////////////////////////////*/
     /// @custom:storage-location erc7201:l1.escrow.actions.v1.storage
     struct V1L1EscrowActionsStorage {
         /// @notice Last block number that an admin action was performed
         uint256 lastAdminActionBlock;
+        /// @notice A mapping of asset indexes to their corresponding in-flight bridge struct
+        mapping(uint64 => InflightBridge) inFlightBridge;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -76,29 +89,33 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
 
     /**
      * @notice Bridge assets to the escrows L1 spot account
-     * @param assetIndexes The indexes of the assets to bridge
-     * @param amounts The amounts of the assets to bridge
+     * @param assetIndex The index of the assets to bridge
+     * @param amount The amounts of the assets to bridge
      */
-    function bridgeToL1(uint64[] memory assetIndexes, uint256[] memory amounts)
-        external
-        onlyRole(LIQUIDITY_ADMIN_ROLE)
-        singleActionBlock
-    {
+    function bridgeToL1(uint64 assetIndex, uint256 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
         V1AssetStorage storage $ = _getV1AssetStorage();
-        uint256 len = assetIndexes.length;
-        require(len == amounts.length, Errors.MISMATCHED_LENGTH());
+        V1L1EscrowActionsStorage storage $$ = _getV1L1EscrowActionsStorage();
 
-        for (uint256 i = 0; i < len; i++) {
-            AssetDetails memory details = $.assetDetails[assetIndexes[i]];
-            require(details.evmContract != address(0), Errors.ADDRESS_ZERO());
+        AssetDetails memory details = $.assetDetails[assetIndex];
+        require(details.evmContract != address(0), Errors.ADDRESS_ZERO());
 
-            // Sanitize the amount to the correct spot decimals so that we dont lose small amounts in the
-            //     bridging process.
-            uint256 factor =
-                (details.evmDecimals > details.weiDecimals) ? 10 ** (details.evmDecimals - details.weiDecimals) : 1;
+        // Sanitize the amount to the correct spot decimals so that we dont lose small amounts in the
+        //     bridging process.
+        uint256 factor =
+            (details.evmDecimals > details.weiDecimals) ? 10 ** (details.evmDecimals - details.weiDecimals) : 1;
 
-            uint256 amountAdjusted = amounts[i] - (amounts[i] % factor);
-            IERC20(details.evmContract).transfer(_assetSystemAddr(assetIndexes[i]), amountAdjusted);
+        uint256 amountAdjusted = amount - (amount % factor);
+        IERC20(details.evmContract).transfer(_assetSystemAddr(assetIndex), amountAdjusted);
+
+        // Update the in-flight bridge; if the last bridge to L1 was in a different block, reset the in-flight amount
+        //     to the new amount, otherwise add the new amount to the existing in-flight amount.
+        uint256 evmBlock = block.number;
+        uint64 lastBridgeToL1Block = $$.inFlightBridge[assetIndex].blockNumber;
+
+        if (evmBlock != lastBridgeToL1Block) {
+            $$.inFlightBridge[assetIndex] = InflightBridge({blockNumber: uint64(evmBlock), amount: amountAdjusted});
+        } else {
+            $$.inFlightBridge[assetIndex].amount += amountAdjusted;
         }
     }
 
