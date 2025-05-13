@@ -50,6 +50,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         EnumerableSet.UintSet supportedAssets;
         /// @notice The address of the fee recipient
         address feeRecipient;
+        /// @notice True if USDC is a supported asset
+        bool usdcSupported;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -66,8 +68,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
     /*==== USDC Spot Index Constant ====*/
 
-    /// @notice The spot index for USDC
-    uint64 public constant USDC_SPOT_INDEX = 0;
+    /// @notice The evm & spot index for USDC
+    uint64 public constant USDC_EVM_SPOT_INDEX = 0;
 
     /*==== General Constants & Immutables ====*/
 
@@ -134,10 +136,13 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         uint64 assetIndex_ = $.assetIndexes[asset];
         require(_isAssetSupported($, assetIndex_), Errors.COLLATERAL_NOT_SUPPORTED());
         AssetDetails memory details = $.assetDetails[assetIndex_];
+        require(details.evmContract == asset, Errors.INVALID_EVM_ADDRESS());
 
         // Get the USD value of the asset to properly calculate shares to mint
         uint256 scaler = 10 ** (18 - details.evmDecimals);
-        uint256 usdValue = escrow.getRate(details.spotMarket).mulWadDown(amount * scaler);
+        uint256 rate =
+            (assetIndex_ == USDC_EVM_SPOT_INDEX) ? 1e18 : escrow.getRate(details.spotMarket, details.szDecimals);
+        uint256 usdValue = rate.mulWadDown(amount * scaler);
         require(usdValue >= $.minDepositValue, Errors.MIN_DEPOSIT_AMOUNT());
 
         if (_shareSupply() == 0) {
@@ -173,7 +178,10 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         // Convert the USD amount to withdraw to the withdraw asset amount
         HyperliquidEscrow escrow = HyperliquidEscrow($.escrows[depositEscrowIndex()]);
-        amount = escrow.getRate(details.spotMarket).mulWadDown(usdAmount);
+
+        uint256 rate =
+            (assetIndex_ == USDC_EVM_SPOT_INDEX) ? 1e18 : escrow.getRate(details.spotMarket, details.szDecimals);
+        amount = rate.mulWadDown(usdAmount);
         uint256 scaler = 10 ** (18 - details.evmDecimals);
         amount = amount / scaler;
         require(amount > 0, Errors.AMOUNT_ZERO());
@@ -252,7 +260,12 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         TokenInfo memory info = _getTokenInfo(assetIndex_);
         require(info.evmContract == assetAddr, Errors.INVALID_EVM_ADDRESS());
-        require(_validateSpotMarket(assetIndex_, spotMarket), Errors.INVALID_SPOT_MARKET());
+
+        if (assetIndex_ == USDC_EVM_SPOT_INDEX) {
+            $.usdcSupported = true;
+        } else {
+            require(_validateSpotMarket(assetIndex_, spotMarket), Errors.INVALID_SPOT_MARKET());
+        }
 
         // Calculate the evm Decimals using the evmExtraWeiDecimals returned from the tokenInfo
         uint8 evmDecimals =
@@ -287,6 +300,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         // Withdraw asset cannot be set to address(0) once it is set
         require(asset != $.withdrawAsset, Errors.INVALID_OPERATION());
+
+        if (assetIndex_ == USDC_EVM_SPOT_INDEX) $.usdcSupported = false;
         delete $.assetIndexes[asset];
         delete $.assetDetails[assetIndex_];
         $.supportedAssets.remove(assetIndex_);
@@ -303,7 +318,10 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     function setWithdrawAsset(address asset) external onlyOwner {
         V1Storage storage $ = _getV1Storage();
         uint64 assetIndex_ = $.assetIndexes[asset];
+        AssetDetails memory details = $.assetDetails[assetIndex_];
+
         require(_isAssetSupported($, assetIndex_), Errors.COLLATERAL_NOT_SUPPORTED());
+        require(details.evmContract == asset, Errors.INVALID_EVM_ADDRESS());
 
         $.withdrawAsset = asset;
         emit WithdrawAssetUpdated(assetIndex_);
@@ -408,6 +426,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
      * @return Whether the asset is supported
      */
     function _isAssetSupported(V1Storage storage $, uint64 assetIndex_) internal view returns (bool) {
+        if (assetIndex_ == USDC_EVM_SPOT_INDEX) return $.usdcSupported;
         return $.supportedAssets.contains(assetIndex_);
     }
 
@@ -434,8 +453,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         SpotInfo memory spotInfo = abi.decode(result, (SpotInfo));
 
         return (
-            (spotInfo.tokens[0] == assetIndex_ && spotInfo.tokens[1] == USDC_SPOT_INDEX)
-                || (spotInfo.tokens[1] == assetIndex_ && spotInfo.tokens[0] == USDC_SPOT_INDEX)
+            (spotInfo.tokens[0] == assetIndex_ && spotInfo.tokens[1] == USDC_EVM_SPOT_INDEX)
+                || (spotInfo.tokens[1] == assetIndex_ && spotInfo.tokens[0] == USDC_EVM_SPOT_INDEX)
         );
     }
 

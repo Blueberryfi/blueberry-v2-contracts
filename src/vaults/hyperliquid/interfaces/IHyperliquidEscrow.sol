@@ -73,9 +73,10 @@ interface IHyperliquidEscrow is IHyperliquidCommon {
     /**
      * @notice Returns the exchange rate of a token in USD
      * @param spotMarket The Spot Market index of a token
+     * @param szDecimals The number of decimals that spot prices are returned with
      * @return The exchange rate in USD with 18 decimals
      */
-    function getRate(uint32 spotMarket) external view returns (uint256);
+    function getRate(uint32 spotMarket, uint8 szDecimals) external view returns (uint256);
 
     // /**
     //  * @notice The L1 address of the vault
