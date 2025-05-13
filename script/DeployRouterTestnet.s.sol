@@ -22,6 +22,8 @@ contract DeployRouterTestnet is Script {
     address public constant PURR = 0xa9056c15938f9aff34CD497c722Ce33dB0C2fD57;
     uint32 public constant PURR_INDEX = 1;
 
+    address public constant LIQUIDITY_ADMIN = 0x263c0a1ff85604f0ee3f4160cAa445d0bad28dF7;
+
     uint256 escrowCounts = 2;
 
     address[] public escrows;
@@ -30,6 +32,7 @@ contract DeployRouterTestnet is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
         address deployer = vm.addr(deployerPrivateKey);
+        require(deployer == OWNER, "Deployer must match OWNER");
 
         // //// Deployment steps ////
 
@@ -54,6 +57,7 @@ contract DeployRouterTestnet is Script {
         console.log("Beacon deployed at", address(beacon));
 
         // 3(c). Deploy all escrow proxies
+        require(LIQUIDITY_ADMIN != address(0), "Liquidity admin role cannot be zero");
         for (uint256 i = 0; i < escrowCounts; i++) {
             address escrowProxy = address(
                 new BeaconProxy(
@@ -61,6 +65,9 @@ contract DeployRouterTestnet is Script {
                 )
             );
             escrows.push(escrowProxy);
+
+            bytes32 role = keccak256("LIQUIDITY_ADMIN_ROLE");
+            HyperliquidEscrow(escrowProxy).grantRole(role, LIQUIDITY_ADMIN);
         }
 
         // 4. Deploy the HyperVaultRouter via the UUPS Proxy Pattern

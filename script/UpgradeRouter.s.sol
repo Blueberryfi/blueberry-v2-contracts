@@ -4,15 +4,8 @@ pragma solidity ^0.8.19;
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
 import {HyperVaultRouter} from "../src/vaults/hyperliquid/HyperVaultRouter.sol";
-
-// Minimal interface for the ProxyAdmin contract
-interface IProxyAdmin {
-    function upgrade(address proxy, address implementation) external;
-
-    function getProxyImplementation(address proxy) external view returns (address);
-
-    function owner() external view returns (address);
-}
+import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import {ITransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 contract UpgradeRouterScript is Script {
     bytes32 internal constant EIP1967_ADMIN_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
@@ -42,9 +35,9 @@ contract UpgradeRouterScript is Script {
 
         // Convert the bytes32 value to an address (lower 20 bytes)
         address adminAddress = address(uint160(uint256(slotValue)));
-        IProxyAdmin proxyAdmin = IProxyAdmin(adminAddress);
+        ProxyAdmin proxyAdmin = ProxyAdmin(adminAddress);
 
-        proxyAdmin.upgrade(ROUTER_PROXY_ADDRESS, address(router));
+        proxyAdmin.upgradeAndCall(ITransparentUpgradeableProxy(ROUTER_PROXY_ADDRESS), address(router), "");
 
         vm.stopBroadcast();
     }
