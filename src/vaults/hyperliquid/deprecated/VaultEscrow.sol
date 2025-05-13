@@ -4,11 +4,12 @@ pragma solidity 0.8.28;
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC20Upgradeable} from "@openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 
 import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 
 import {IL1Write} from "@blueberry-v2/vaults/hyperliquid/interfaces/IL1Write.sol";
-import {IVaultEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/IVaultEscrow.sol";
+import {IVaultEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/deprecated/IVaultEscrow.sol";
 
 /**
  * @title VaultEscrow
@@ -21,6 +22,7 @@ import {IVaultEscrow} from "@blueberry-v2/vaults/hyperliquid/interfaces/IVaultEs
  */
 contract VaultEscrow is IVaultEscrow, Initializable {
     using SafeERC20 for ERC20Upgradeable;
+    using FixedPointMathLib for uint256;
 
     /*//////////////////////////////////////////////////////////////
                                 Storage
@@ -133,7 +135,7 @@ contract VaultEscrow is IVaultEscrow, Initializable {
         return _withdrawFromL1Vault(assets_);
     }
 
-    /// @notice Reduces the internal accounting balance of the vault. 
+    /// @notice Reduces the internal accounting balance of the vault.
     function reduceBalance(uint64 assets_) external onlyVaultWrapper {
         V1Storage storage $ = _getV1Storage();
         _updateState($);
@@ -281,6 +283,11 @@ contract VaultEscrow is IVaultEscrow, Initializable {
             return $.assetBalance + $.l1WithdrawState.lastWithdraws;
         }
         return $.assetBalance;
+    }
+
+    function lockedUntil() external view returns (uint64) {
+        (, uint64 lockedUntil_) = _vaultEquity();
+        return uint64(uint256(lockedUntil_).unsafeDivUp(1000));
     }
 
     /*//////////////////////////////////////////////////////////////

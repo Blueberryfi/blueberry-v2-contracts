@@ -14,8 +14,8 @@ import {FixedPointMathLib as FpMath} from "@solmate/utils/FixedPointMathLib.sol"
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 
-import {VaultEscrow} from "@blueberry-v2/vaults/hyperliquid/VaultEscrow.sol";
-import {IHyperEvmVault} from "@blueberry-v2/vaults/hyperliquid/interfaces/IHyperEvmVault.sol";
+import {VaultEscrow} from "@blueberry-v2/vaults/hyperliquid/deprecated/VaultEscrow.sol";
+import {IHyperEvmVault} from "@blueberry-v2/vaults/hyperliquid/interfaces/deprecated/IHyperEvmVault.sol";
 
 /**
  * @title HyperEvmVault
@@ -41,7 +41,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         uint64 lastFeeCollectionTimestamp;
         /// @notice The management fee in basis points
         uint64 managementFeeBps;
-        /// @notice The minimum amount of assets that can be deposited into the vault
+        /// @notice The minimum amount of assets that can be deposited into the vault. Also represents minimum withdraw
         uint64 minDepositAmount;
         /// @notice An array of addresses of escrow contracts for the vault
         address[] escrows;
@@ -191,6 +191,7 @@ contract HyperEvmVault is IHyperEvmVault, ERC4626Upgradeable, Ownable2StepUpgrad
         uint256 tvl_ = _totalEscrowValue($);
         _takeFee($, tvl_);
         uint256 assetsToRedeem = shares_.mulDivDown(tvl_, totalSupply());
+        require(assetsToRedeem >= $.minDepositAmount, Errors.MIN_DEPOSIT_AMOUNT()); // TODO: Clean up
 
         VaultEscrow escrowToRedeem = VaultEscrow($.escrows[redeemEscrowIndex()]);
         assetsToRedeem = escrowToRedeem.withdraw(uint64(assetsToRedeem));

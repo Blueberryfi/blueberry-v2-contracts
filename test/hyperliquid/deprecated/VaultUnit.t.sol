@@ -2,15 +2,15 @@
 pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
-import {MockERC20, ERC20} from "../mocks/MockERC20.sol";
-import {HyperEvmVault, IHyperEvmVault} from "../../src/vaults/hyperliquid/HyperEvmVault.sol";
-import {VaultEscrow} from "../../src/vaults/hyperliquid/VaultEscrow.sol";
-import {BlueberryErrors} from "../../src/helpers/BlueberryErrors.sol";
+import {MockERC20, ERC20} from "../../mocks/MockERC20.sol";
+import {HyperEvmVault, IHyperEvmVault} from "@blueberry-v2/vaults/hyperliquid/deprecated/HyperEvmVault.sol";
+import {VaultEscrow} from "@blueberry-v2/vaults/hyperliquid/deprecated/VaultEscrow.sol";
+import {BlueberryErrors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 import {
     MockWritePrecompile,
     MockL1BlockNumberPrecompile,
     MockVaultEquityPrecompile
-} from "../mocks/MockHyperliquidPrecompiles.sol";
+} from "../../mocks/MockHyperliquidPrecompiles.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {HlpHelpers} from "./HlpHelpers.t.sol";
@@ -331,7 +331,7 @@ contract VaultUnitTest is HlpHelpers {
         uint64 fee = 4.5375e8;
         vm.startPrank(alice);
         wrapper.requestRedeem(100e8);
-    
+
         vm.startPrank(bob);
         wrapper.requestRedeem(100e8);
 
@@ -351,7 +351,7 @@ contract VaultUnitTest is HlpHelpers {
         // Validate redeemRequest is cleared
         assertEq(wrapper.redeemRequests(alice).shares, 1);
         assertEq(wrapper.redeemRequests(alice).assets, 2);
-        
+
         // Bob approve 50e8 shares, i.e. a half of his assets
         vm.startPrank(bob);
         wrapper.approve(alice, 50e8);
