@@ -88,9 +88,6 @@ contract DeployRouterTestnet is Script {
 
         //ERC20(PURR).approve(address(router), type(uint256).max);
 
-        // 5. Set minter permissions on router
-        shareToken.grantRole(shareToken.MINTER_ROLE(), address(router));
-
         console.log("Router Proxy deployed at", address(router));
 
         console.log("Escrow 0", address(router.escrows(0)));
