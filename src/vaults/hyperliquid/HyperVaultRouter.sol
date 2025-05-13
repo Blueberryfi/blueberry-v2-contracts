@@ -126,7 +126,12 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     /////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IHyperVaultRouter
-    function deposit(address asset, uint256 amount) external override nonReentrant returns (uint256 shares) {
+    function deposit(address asset, uint256 amount, uint256 minOut)
+        external
+        override
+        nonReentrant
+        returns (uint256 shares)
+    {
         V1Storage storage $ = _getV1Storage();
 
         // Get the escrow to deposit into
@@ -154,6 +159,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
             require(shares > 0, Errors.ZERO_SHARES());
         }
 
+        require(shares >= minOut, Errors.SLIPPAGE_TOO_HIGH());
+
         emit Deposit(msg.sender, asset, amount, shares);
 
         // Transfer the asset to the escrow contract and mint shares to user
@@ -162,7 +169,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     }
 
     /// @inheritdoc IHyperVaultRouter
-    function redeem(uint256 shares) external override nonReentrant returns (uint256 amount) {
+    function redeem(uint256 shares, uint256 minOut) external override nonReentrant returns (uint256 amount) {
         V1Storage storage $ = _getV1Storage();
         require(shares > 0, Errors.ZERO_SHARES());
         require($.withdrawAsset != address(0), Errors.ADDRESS_ZERO());
@@ -181,6 +188,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         uint256 rate = _getRate(address(escrow), assetIndex_, details);
         amount = usdAmount.divWadDown(rate * scaler);
         require(amount > 0, Errors.AMOUNT_ZERO());
+        require(amount >= minOut, Errors.SLIPPAGE_TOO_HIGH());
 
         emit Redeem(msg.sender, shares, amount);
 

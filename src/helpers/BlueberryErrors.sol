@@ -92,4 +92,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when the length of the assets and amounts arrays do not match
     error MISMATCHED_LENGTH();
+
+    /// @notice Error thrown when slippage is too high and the minimum amount is not met
+    error SLIPPAGE_TOO_HIGH();
 }
