@@ -104,12 +104,11 @@ contract HyperliquidEscrow is IHyperliquidEscrow, L1EscrowActions {
 
             if (assetIndex == USDC_SPOT_INDEX) {
                 // If the asset is USDC we only need to get the contract balance since we already queried the spot balance
-                uint256 usdcBalance = IERC20(assetAddr).balanceOf(address(this)) * evmScaling;
+                tvl_ += IERC20(assetAddr).balanceOf(address(this)) * evmScaling;
                 // If we are still in the L1 bridge period (same EVM block as last bridge action took place), we need to add the in-flight bridge amounts
                 if (block.number == lastBridgeToL1Block) {
-                    usdcBalance += $$.inFlightBridge[assetIndex].amount * evmScaling;
+                    tvl_ += $$.inFlightBridge[assetIndex].amount * evmScaling;
                 }
-                tvl_ += usdcBalance * evmScaling;
             } else {
                 uint256 rate = getRate(details.spotMarket, details.szDecimals);
                 uint256 balance = IERC20(assetAddr).balanceOf(address(this)) * evmScaling;
