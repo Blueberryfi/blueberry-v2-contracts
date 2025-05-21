@@ -99,7 +99,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
         AssetDetails memory details = $.assetDetails[assetIndex];
         require(details.evmContract != address(0), Errors.ADDRESS_ZERO());
 
-        // Sanitize the amount to the correct spot decimals so åthat we dont lose small amounts in the
+        // Sanitize the amount to the correct spot decimals so that we dont lose small amounts in the
         //     bridging process.
         uint256 factor =
             (details.evmDecimals > details.weiDecimals) ? 10 ** (details.evmDecimals - details.weiDecimals) : 1;
