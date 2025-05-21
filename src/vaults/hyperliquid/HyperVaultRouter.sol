@@ -37,7 +37,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         /// @notice The management fee in basis points
         uint64 managementFeeBps;
         /// @notice The minimum value in USD that can be deposited into the vault scaled to 1e18
-        uint64 minDepositValue;
+        uint256 minDepositValue;
         /// @notice The asset that will be used to withdraw from the vault
         address withdrawAsset;
         /// @notice An array of addresses of escrow contracts for the vault
@@ -248,7 +248,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     }
 
     /// @notice Sets the minimum deposit amount for the vault
-    function setMinDepositValue(uint64 newMinDepositValue_) external onlyOwner {
+    function setMinDepositValue(uint256 newMinDepositValue_) external onlyOwner {
         _getV1Storage().minDepositValue = newMinDepositValue_;
     }
 
