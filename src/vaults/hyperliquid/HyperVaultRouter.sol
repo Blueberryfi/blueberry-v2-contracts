@@ -261,6 +261,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     /// @notice Adds a new supported asset to all the escrows
     function addAsset(address assetAddr, uint32 assetIndex_, uint32 spotMarket) external onlyOwner {
         V1Storage storage $ = _getV1Storage();
+        _takeFee($, tvl());
 
         TokenInfo memory info = _getTokenInfo(assetIndex_);
         require(info.evmContract == assetAddr, Errors.INVALID_EVM_ADDRESS());
