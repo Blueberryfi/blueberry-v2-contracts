@@ -37,7 +37,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         /// @notice The management fee in basis points
         uint64 managementFeeBps;
         /// @notice The minimum value in USD that can be deposited into the vault scaled to 1e18
-        uint64 minDepositValue;
+        uint256 minDepositValue;
         /// @notice The asset that will be used to withdraw from the vault
         address withdrawAsset;
         /// @notice An array of addresses of escrow contracts for the vault
@@ -248,7 +248,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     }
 
     /// @notice Sets the minimum deposit amount for the vault
-    function setMinDepositValue(uint64 newMinDepositValue_) external onlyOwner {
+    function setMinDepositValue(uint256 newMinDepositValue_) external onlyOwner {
         _getV1Storage().minDepositValue = newMinDepositValue_;
     }
 
@@ -261,6 +261,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
     /// @notice Adds a new supported asset to all the escrows
     function addAsset(address assetAddr, uint32 assetIndex_, uint32 spotMarket) external onlyOwner {
         V1Storage storage $ = _getV1Storage();
+        _takeFee($, tvl());
 
         TokenInfo memory info = _getTokenInfo(assetIndex_);
         require(info.evmContract == assetAddr, Errors.INVALID_EVM_ADDRESS());
@@ -304,6 +305,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         // Withdraw asset cannot be set to address(0) once it is set
         require(asset != $.withdrawAsset, Errors.INVALID_OPERATION());
+        // Validate that the address is properly supported
+        require($.assetDetails[assetIndex_].evmContract == asset, Errors.COLLATERAL_NOT_SUPPORTED());
 
         if (assetIndex_ == USDC_EVM_SPOT_INDEX) $.usdcSupported = false;
         delete $.assetIndexes[asset];
@@ -515,7 +518,11 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         // Calculate the max redeemable amount based on the USD value of the withdraw asset
         uint256 usdValue = maxWithdraw.mulWadDown(rate * scaler);
-        return usdValue.mulDivDown(_shareSupply(), tvl());
+        uint256 tvl_ = tvl();
+        if (tvl_ == 0) return 0;
+
+        uint256 feeShares = _previewFeeShares($, tvl_);
+        return usdValue.mulDivUp(_shareSupply() + feeShares, tvl_);
     }
 
     function previewDeposit(address asset, uint256 amount) external view returns (uint256 shares) {

@@ -71,7 +71,7 @@ abstract contract EscrowAssetStorage is IHyperliquidCommon {
     /**
      * @notice Removes a new asset to the escrow
      * @dev Only the vault router contract can call this function
-     * @dev The contract & spot balance must be zero before removing
+     * @dev The contract, spot & inflight balances must be zero before removing
      * @param assetIndex The spot index of the asset to remove
      */
     function removeAsset(uint64 assetIndex) external onlyRouter {
@@ -79,12 +79,13 @@ abstract contract EscrowAssetStorage is IHyperliquidCommon {
         require($.supportedAssets.length() >= 2, Errors.INVALID_OPERATION());
         require($.supportedAssets.contains(assetIndex), Errors.COLLATERAL_NOT_SUPPORTED());
 
-        // Make sure the contract & spot balance is zero before removing
+        // Make sure the contract, spot, & inflight balances are zero before removing
         AssetDetails memory details = $.assetDetails[assetIndex];
         uint256 assetBalance = IERC20(details.evmContract).balanceOf(address(this));
         require(assetBalance == 0, Errors.INSUFFICIENT_BALANCE());
         require(_spotAssetBalance(assetIndex) == 0, Errors.INSUFFICIENT_BALANCE());
-
+        require(_inflightBalance(assetIndex) == 0, Errors.INSUFFICIENT_BALANCE());
+    
         // Remove the asset from the set of supported assets
         $.supportedAssets.remove(assetIndex);
         delete $.assetDetails[assetIndex];
@@ -134,4 +135,10 @@ abstract contract EscrowAssetStorage is IHyperliquidCommon {
      * @return The spot asset balance
      */
     function _spotAssetBalance(uint64 assetIndex) internal view virtual returns (uint256);
+
+    /**
+     * @notice Returns the current balance of an asset that is in-flight to L1
+     * @param assetIndex The asset index to check
+     */
+    function _inflightBalance(uint64 assetIndex) internal view virtual returns (uint256);
 }
