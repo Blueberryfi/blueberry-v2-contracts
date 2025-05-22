@@ -305,6 +305,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         // Withdraw asset cannot be set to address(0) once it is set
         require(asset != $.withdrawAsset, Errors.INVALID_OPERATION());
+        // Validate that the address is properly supported
+        require($.assetDetails[assetIndex_].evmContract == asset, Errors.COLLATERAL_NOT_SUPPORTED());
 
         if (assetIndex_ == USDC_EVM_SPOT_INDEX) $.usdcSupported = false;
         delete $.assetIndexes[asset];
