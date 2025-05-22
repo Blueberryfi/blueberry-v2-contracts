@@ -520,7 +520,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         if (tvl_ == 0) return 0;
 
         uint256 feeShares = _previewFeeShares($, tvl_);
-        return usdValue.mulDivDown(_shareSupply() + feeShares, tvl_);
+        return usdValue.mulDivUp(_shareSupply() + feeShares, tvl_);
     }
 
     /// @inheritdoc IHyperVaultRouter
