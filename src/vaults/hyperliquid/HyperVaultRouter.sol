@@ -516,7 +516,11 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         // Calculate the max redeemable amount based on the USD value of the withdraw asset
         uint256 usdValue = maxWithdraw.mulWadDown(rate * scaler);
-        return usdValue.mulDivDown(_shareSupply(), tvl());
+        uint256 tvl_ = tvl();
+        if (tvl_ == 0) return 0;
+
+        uint256 feeShares = _previewFeeShares($, tvl_);
+        return usdValue.mulDivDown(_shareSupply() + feeShares, tvl_);
     }
 
     /// @inheritdoc IHyperVaultRouter
