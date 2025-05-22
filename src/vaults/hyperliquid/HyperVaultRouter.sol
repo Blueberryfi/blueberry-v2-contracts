@@ -555,7 +555,8 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
 
         uint256 tvl_ = tvl();
         uint256 feeShares = _previewFeeShares($, tvl_);
-        uint256 usdAmount = (shares + feeShares).mulDivDown(tvl_, _shareSupply());
+        uint256 totalExpectedShares = _shareSupply() + feeShares;
+        uint256 usdAmount = shares.mulDivDown(tvl_, totalExpectedShares);
 
         // Get amount of withdraw asset from escrow
         uint64 assetIndex_ = $.assetIndexes[$.withdrawAsset];
