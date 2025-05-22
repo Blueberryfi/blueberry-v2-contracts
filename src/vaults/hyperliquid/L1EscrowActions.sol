@@ -107,16 +107,8 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
         uint256 amountAdjusted = amount - (amount % factor);
         IERC20(details.evmContract).transfer(_assetSystemAddr(assetIndex), amountAdjusted);
 
-        // Update the in-flight bridge; if the last bridge to L1 was in a different block, reset the in-flight amount
-        //     to the new amount, otherwise add the new amount to the existing in-flight amount.
-        uint256 evmBlock = block.number;
-        uint64 lastBridgeToL1Block = $$.inFlightBridge[assetIndex].blockNumber;
-
-        if (evmBlock != lastBridgeToL1Block) {
-            $$.inFlightBridge[assetIndex] = InflightBridge({blockNumber: uint64(evmBlock), amount: amountAdjusted});
-        } else {
-            $$.inFlightBridge[assetIndex].amount += amountAdjusted;
-        }
+        // Update the in-flight bridge struct with the new amount sent and block number
+        $$.inFlightBridge[assetIndex] = InflightBridge({blockNumber: uint64(block.number), amount: amountAdjusted});
     }
 
     /**
