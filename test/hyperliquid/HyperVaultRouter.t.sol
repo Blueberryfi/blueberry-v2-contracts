@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.28;
 
-import {Test,console} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {HyperVaultRouter} from "src/vaults/hyperliquid/HyperVaultRouter.sol";
 import {HyperliquidEscrow} from "src/vaults/hyperliquid/HyperliquidEscrow.sol";
 import {WrappedVaultShare} from "src/vaults/hyperliquid/WrappedVaultShare.sol";
@@ -41,7 +41,7 @@ contract HyperVaultRouterTest is Test {
     // Constants
     uint64 constant USDC_SPOT_INDEX = 0;
     uint64 constant PURR_SPOT_INDEX = 1;
-    
+
     // Contracts
     HyperVaultRouter public router;
     WrappedVaultShare public shareToken;
@@ -49,11 +49,11 @@ contract HyperVaultRouterTest is Test {
     HyperliquidEscrow public escrow2;
     HyperliquidEscrow public escrow3;
     address[] public escrows;
-    
+
     // Mock tokens
     MockERC20 public usdc;
     MockERC20 public purr;
-    
+
     // Test addresses
     address public admin = address(0x1);
     address public user1 = address(0x2);
@@ -70,7 +70,7 @@ contract HyperVaultRouterTest is Test {
         vm.stopPrank();
         _;
     }
-    
+
     // Setup function
     function setUp() public {
         address deployer = admin;
@@ -161,18 +161,15 @@ contract HyperVaultRouterTest is Test {
             evmExtraWeiDecimals: 0
         });
 
-        SpotInfo memory purrSpotInfo = SpotInfo({
-            name: "PURR/USDC",
-            tokens: [PURR_SPOT_INDEX, USDC_SPOT_INDEX]
-        });
-        
+        SpotInfo memory purrSpotInfo = SpotInfo({name: "PURR/USDC", tokens: [PURR_SPOT_INDEX, USDC_SPOT_INDEX]});
+
         // Setup mock token info.
         vm.mockCall(
             address(0x000000000000000000000000000000000000080C), // TOKEN_INFO_PRECOMPILE_ADDRESS
             abi.encode(USDC_SPOT_INDEX),
             abi.encode(usdcInfo)
         );
-        
+
         vm.mockCall(
             address(0x000000000000000000000000000000000000080C), // TOKEN_INFO_PRECOMPILE_ADDRESS
             abi.encode(PURR_SPOT_INDEX),
@@ -185,102 +182,54 @@ contract HyperVaultRouterTest is Test {
             abi.encode(1), // spot market 1
             abi.encode(purrSpotInfo)
         );
-        
+
         vm.startPrank(admin);
 
         // Add USDC as supported asset
         router.addAsset(address(usdc), uint32(USDC_SPOT_INDEX), 0);
-        
+
         // Add PURR as supported asset
         router.addAsset(address(purr), uint32(PURR_SPOT_INDEX), 1);
-        
+
         // Set USDC as withdraw asset
         router.setWithdrawAsset(address(usdc));
 
         vm.stopPrank();
-        
+
         // Mint tokens to users
         usdc.mint(user1, 1000e6);
         purr.mint(user1, 10e18);
         usdc.mint(user2, 1000e6);
         purr.mint(user2, 10e18);
     }
-    
+
     // Helper function to mock TVL
     function mockTVL(uint256 tvl_) internal {
         // Dictate what the TVL of the all escrows would be. One of them would be `tvl_` and the others `0`.
         uint256 escrow = router.depositEscrowIndex();
 
         if (escrow == 0) {
-            vm.mockCall(
-                address(escrow1),
-                abi.encodeWithSelector(HyperliquidEscrow.tvl.selector),
-                abi.encode(tvl_)
-            );
-            vm.mockCall(
-                address(escrow2),
-                abi.encodeWithSelector(HyperliquidEscrow.tvl.selector),
-                abi.encode(0)
-            );
-            vm.mockCall(
-                address(escrow3),
-                abi.encodeWithSelector(HyperliquidEscrow.tvl.selector),
-                abi.encode(0)
-            );
+            vm.mockCall(address(escrow1), abi.encodeWithSelector(HyperliquidEscrow.tvl.selector), abi.encode(tvl_));
+            vm.mockCall(address(escrow2), abi.encodeWithSelector(HyperliquidEscrow.tvl.selector), abi.encode(0));
+            vm.mockCall(address(escrow3), abi.encodeWithSelector(HyperliquidEscrow.tvl.selector), abi.encode(0));
         } else if (escrow == 1) {
-            vm.mockCall(
-                address(escrow1),
-                abi.encodeWithSelector(HyperliquidEscrow.tvl.selector),
-                abi.encode(0)
-            );
-            vm.mockCall(
-                address(escrow2),
-                abi.encodeWithSelector(HyperliquidEscrow.tvl.selector),
-                abi.encode(tvl_)
-            );
-            vm.mockCall(
-                address(escrow3),
-                abi.encodeWithSelector(HyperliquidEscrow.tvl.selector),
-                abi.encode(0)
-            );
+            vm.mockCall(address(escrow1), abi.encodeWithSelector(HyperliquidEscrow.tvl.selector), abi.encode(0));
+            vm.mockCall(address(escrow2), abi.encodeWithSelector(HyperliquidEscrow.tvl.selector), abi.encode(tvl_));
+            vm.mockCall(address(escrow3), abi.encodeWithSelector(HyperliquidEscrow.tvl.selector), abi.encode(0));
         } else if (escrow == 2) {
-            vm.mockCall(
-                address(escrow1),
-                abi.encodeWithSelector(HyperliquidEscrow.tvl.selector),
-                abi.encode(0)
-            );
-            vm.mockCall(
-                address(escrow2),
-                abi.encodeWithSelector(HyperliquidEscrow.tvl.selector),
-                abi.encode(0)
-            );
-            vm.mockCall(
-                address(escrow3),
-                abi.encodeWithSelector(HyperliquidEscrow.tvl.selector),
-                abi.encode(tvl_)
-            );
+            vm.mockCall(address(escrow1), abi.encodeWithSelector(HyperliquidEscrow.tvl.selector), abi.encode(0));
+            vm.mockCall(address(escrow2), abi.encodeWithSelector(HyperliquidEscrow.tvl.selector), abi.encode(0));
+            vm.mockCall(address(escrow3), abi.encodeWithSelector(HyperliquidEscrow.tvl.selector), abi.encode(tvl_));
         }
     }
-    
+
     // Helper function to mock rate
     function mockRate(uint256 rate_) internal {
-        vm.mockCall(
-            address(escrow1),
-            abi.encodeWithSelector(HyperliquidEscrow.getRate.selector),
-            abi.encode(rate_)
-        );
-        vm.mockCall(
-            address(escrow2),
-            abi.encodeWithSelector(HyperliquidEscrow.getRate.selector),
-            abi.encode(rate_)
-        );
-        vm.mockCall(
-            address(escrow3),
-            abi.encodeWithSelector(HyperliquidEscrow.getRate.selector),
-            abi.encode(rate_)
-        );
+        vm.mockCall(address(escrow1), abi.encodeWithSelector(HyperliquidEscrow.getRate.selector), abi.encode(rate_));
+        vm.mockCall(address(escrow2), abi.encodeWithSelector(HyperliquidEscrow.getRate.selector), abi.encode(rate_));
+        vm.mockCall(address(escrow3), abi.encodeWithSelector(HyperliquidEscrow.getRate.selector), abi.encode(rate_));
     }
-    
+
     // Test deposit with USDC
     function testDepositUSDC() public initialDeposit {
         uint256 depositAmount = 20e6; // 20e6 USDC
@@ -288,7 +237,7 @@ contract HyperVaultRouterTest is Test {
 
         // Mock TVL to be 10e18 for first deposit since this amount were deposited by admin.
         mockTVL(10e18);
-        
+
         vm.startPrank(user1);
         usdc.approve(address(router), depositAmount);
         uint256 shares = router.deposit(address(usdc), depositAmount, minOut);
@@ -302,16 +251,16 @@ contract HyperVaultRouterTest is Test {
     function testDepositPURR() public initialDeposit {
         uint256 depositAmount = 1e18; // 1 PURR
         uint256 minOut = 0;
-        
+
         mockTVL(10e18);
         // Mock PURR price to be 20 USDC for 1.
         mockRate(20e6);
-        
+
         vm.startPrank(user1);
         purr.approve(address(router), depositAmount);
         uint256 shares = router.deposit(address(purr), depositAmount, minOut);
         vm.stopPrank();
-        
+
         assertEq(shares, 20e18); // 1 PURR * 20e18 USDC
         assertEq(shareToken.balanceOf(user1), shares);
     }
@@ -320,7 +269,7 @@ contract HyperVaultRouterTest is Test {
     function testDepositUnsupportedAsset() public initialDeposit {
         MockERC20 unsupportedToken = new MockERC20("UNSUPPORTED", "UNSP", 18);
         uint256 depositAmount = 1e18;
-        
+
         vm.startPrank(user1);
         unsupportedToken.mint(user1, depositAmount);
         unsupportedToken.approve(address(router), depositAmount);
@@ -333,9 +282,9 @@ contract HyperVaultRouterTest is Test {
     function testDepositWithSlippage() public initialDeposit {
         uint256 depositAmount = 20e6; // 20 USDC
         uint256 minOut = 21e18; // Expect more shares than possible
-        
+
         mockTVL(10e18);
-        
+
         vm.startPrank(user1);
         usdc.approve(address(router), depositAmount);
         vm.expectRevert();
@@ -366,21 +315,21 @@ contract HyperVaultRouterTest is Test {
     function testDepositMultipleUsers() public initialDeposit {
         uint256 depositAmount1 = 20e6; // 20 USDC
         uint256 depositAmount2 = 30e6; // 30 USDC
-        
+
         // First user deposits
         mockTVL(10e18);
         vm.startPrank(user1);
         usdc.approve(address(router), depositAmount1);
         uint256 shares1 = router.deposit(address(usdc), depositAmount1, 0);
         vm.stopPrank();
-        
+
         // Second user deposits
         mockTVL(30e18);
         vm.startPrank(user2);
         usdc.approve(address(router), depositAmount2);
         uint256 shares2 = router.deposit(address(usdc), depositAmount2, 0);
         vm.stopPrank();
-        
+
         // Check share distribution
         assertEq(shares1, depositAmount1 * 1e12);
         assertEq(shares2, depositAmount2 * 1e12);
@@ -393,11 +342,11 @@ contract HyperVaultRouterTest is Test {
     function testSubsequentDeposit() public initialDeposit {
         uint256 depositAmount = 10e6; // 10 USDC
         mockTVL(10e18);
-        
+
         vm.startPrank(user1);
         usdc.approve(address(router), depositAmount);
         uint256 firstShares = router.deposit(address(usdc), depositAmount, 0);
-        
+
         // Second deposit
         uint256 secondDeposit = 20e6; // 20 USDC
         mockTVL(20e18); // TVL is now 20 USDC
@@ -415,17 +364,17 @@ contract HyperVaultRouterTest is Test {
     function testDepositPURRWithSlippage() public initialDeposit {
         uint256 depositAmount = 1e18; // 1 PURR
         uint256 minOut = 21e18; // Expect more shares than possible
-        
+
         mockTVL(10e18);
         mockRate(20e6);
-        
+
         vm.startPrank(user1);
         purr.approve(address(router), depositAmount);
         vm.expectRevert();
         router.deposit(address(purr), depositAmount, minOut);
         vm.stopPrank();
     }
-    
+
     // Test deposit with huge TVL and little deposit
     function testDepositRoundsToZeroShares() public initialDeposit {
         // huge TVL, tiny deposit
@@ -536,7 +485,7 @@ contract HyperVaultRouterTest is Test {
     function testDepositSucceedsWithExactMinOut() public initialDeposit {
         mockTVL(10e18);
 
-        uint256 depositAmount = 20e6;   // 20 USDC
+        uint256 depositAmount = 20e6; // 20 USDC
         uint256 expectedShares = 20e18; // shareSupply * (usdValue/tvl) = 10e18 * (20e18/10e18)
         vm.startPrank(user1);
         usdc.approve(address(router), depositAmount);
@@ -564,23 +513,16 @@ contract HyperVaultRouterTest is Test {
             evmExtraWeiDecimals: 0
         });
 
-        SpotInfo memory usdtSpotInfo = SpotInfo({
-            name: "USDT/USDC",
-            tokens: [4, USDC_SPOT_INDEX]
-        });
-        
-        vm.mockCall(
-            address(0x000000000000000000000000000000000000080C),
-            abi.encode(4),
-            abi.encode(usdtInfo)
-        );
+        SpotInfo memory usdtSpotInfo = SpotInfo({name: "USDT/USDC", tokens: [4, USDC_SPOT_INDEX]});
+
+        vm.mockCall(address(0x000000000000000000000000000000000000080C), abi.encode(4), abi.encode(usdtInfo));
 
         vm.mockCall(
             address(0x080B), // SPOT_INFO_PRECOMPILE_ADDRESS
             abi.encode(4), // spot market 4
             abi.encode(usdtSpotInfo)
         );
-        
+
         vm.startPrank(admin);
 
         // Add USDT as supported asset.
@@ -589,31 +531,19 @@ contract HyperVaultRouterTest is Test {
         vm.mockCall(
             address(0x0000000000000000000000000000000000000801), // SPOT_BALANCE_PRECOMPILE_ADDRESS
             abi.encode(address(escrow1), USDC_SPOT_INDEX),
-            abi.encode(SpotBalance({
-                total: 0,
-                hold: 0,
-                entryNtl: 0
-            }))
+            abi.encode(SpotBalance({total: 0, hold: 0, entryNtl: 0}))
         );
 
         vm.mockCall(
             address(0x0000000000000000000000000000000000000801), // SPOT_BALANCE_PRECOMPILE_ADDRESS
             abi.encode(address(escrow2), USDC_SPOT_INDEX),
-            abi.encode(SpotBalance({
-                total: 0,
-                hold: 0,
-                entryNtl: 0
-            }))
+            abi.encode(SpotBalance({total: 0, hold: 0, entryNtl: 0}))
         );
 
         vm.mockCall(
             address(0x0000000000000000000000000000000000000801), // SPOT_BALANCE_PRECOMPILE_ADDRESS
             abi.encode(address(escrow3), USDC_SPOT_INDEX),
-            abi.encode(SpotBalance({
-                total: 0,
-                hold: 0,
-                entryNtl: 0
-            }))
+            abi.encode(SpotBalance({total: 0, hold: 0, entryNtl: 0}))
         );
 
         vm.startPrank(admin);
@@ -634,21 +564,21 @@ contract HyperVaultRouterTest is Test {
         // First deposit some USDC
         uint256 depositAmount = 100e6; // 100 USDC
         mockTVL(10e18);
-        
+
         vm.startPrank(user1);
         usdc.approve(address(router), depositAmount);
         uint256 shares = router.deposit(address(usdc), depositAmount, 0);
-        
+
         // Mock TVL to be 100 USDC
         mockTVL(110e18);
-        
+
         // Approve router to burn shares
         shareToken.approve(address(router), shares);
-        
+
         // Redeem all shares
         uint256 redeemed = router.redeem(shares, 0);
         vm.stopPrank();
-        
+
         assertEq(redeemed, depositAmount);
         assertEq(shareToken.balanceOf(user1), 0);
     }
@@ -660,12 +590,12 @@ contract HyperVaultRouterTest is Test {
 
         mockTVL(10e18);
         mockRate(20e6);
-        
+
         vm.startPrank(user1);
         purr.approve(address(router), depositAmount);
         uint256 shares = router.deposit(address(purr), depositAmount, 0);
         vm.stopPrank();
-        
+
         mockTVL(30e18);
 
         // User 2 deposit USDC since it is the `withdrawAsset`.
@@ -677,14 +607,14 @@ contract HyperVaultRouterTest is Test {
         vm.startPrank(user1);
 
         mockTVL(50e18);
-        
+
         // Approve router to burn shares
         shareToken.approve(address(router), shares);
-        
+
         // Redeem all shares for the withdrawAsset which is USDC
         uint256 redeemed = router.redeem(shares, 0);
         vm.stopPrank();
-        
+
         assertEq(redeemed, 20e6);
         assertEq(shareToken.balanceOf(user1), 0);
     }
@@ -700,27 +630,27 @@ contract HyperVaultRouterTest is Test {
     // Test deposit and redeem with yield
     function testDepositRedeemWithYield() public initialDeposit {
         uint256 depositAmount = 100e6; // 100 USDC
-        
+
         mockTVL(10e18);
 
         vm.startPrank(user1);
         usdc.approve(address(router), depositAmount);
         uint256 shares = router.deposit(address(usdc), depositAmount, 0);
-        
+
         // Move time forward 1 year to accrue fees
         vm.warp(block.timestamp + 365 days);
-        
+
         // Mock TVL to be 110 USDC initial + 5 USDC accrued yield
         mockTVL(110e18 + 5e18);
         usdc.mint(escrows[router.depositEscrowIndex()], 5e6); // mint the yield
-        
+
         // Approve router to burn shares
         shareToken.approve(address(router), shares);
-        
+
         // Redeem all shares
         uint256 redeemed = router.redeem(shares, 0);
         vm.stopPrank();
-        
+
         assertTrue(redeemed > depositAmount);
         assertEq(shareToken.balanceOf(user1), 0);
     }
@@ -752,21 +682,21 @@ contract HyperVaultRouterTest is Test {
         // First deposit some USDC
         uint256 depositAmount = 100e6; // 100 USDC
         mockTVL(0);
-        
+
         vm.startPrank(user1);
         usdc.approve(address(router), depositAmount);
         uint256 shares = router.deposit(address(usdc), depositAmount, 0);
-        
+
         // Mock TVL to be zero
         mockTVL(100e18);
-        
+
         // Approve router to burn shares
         shareToken.approve(address(router), shares);
-        
+
         // Redeem all shares
         uint256 redeemed = router.redeem(shares, 0);
         vm.stopPrank();
-        
+
         assertEq(redeemed, depositAmount);
         assertEq(shareToken.balanceOf(user1), 0);
     }
@@ -777,11 +707,11 @@ contract HyperVaultRouterTest is Test {
         uint256 depositAmount = 100e6; // 100 USDC
 
         mockTVL(0);
-        
+
         vm.startPrank(user1);
         usdc.approve(address(router), depositAmount);
         router.deposit(address(usdc), depositAmount, 0);
-        
+
         // Try to redeem 1 wei of shares
         mockTVL(100e18);
         shareToken.approve(address(router), 1);
@@ -795,26 +725,26 @@ contract HyperVaultRouterTest is Test {
         // First deposit some USDC
         uint256 depositAmount = 100e6; // 100 USDC
         mockTVL(0);
-        
+
         vm.startPrank(user1);
         usdc.approve(address(router), depositAmount);
         uint256 shares = router.deposit(address(usdc), depositAmount, 0);
-        
+
         // Mock different balances in different escrows
         usdc.mint(address(escrow1), 30e6);
         usdc.mint(address(escrow2), 40e6);
         usdc.mint(address(escrow3), 30e6);
-        
+
         // Mock TVL to be 100 USDC
         mockTVL(100e18);
-        
+
         // Approve router to burn shares
         shareToken.approve(address(router), shares);
-        
+
         // Redeem all shares
         uint256 redeemed = router.redeem(shares, 0);
         vm.stopPrank();
-        
+
         assertEq(redeemed, depositAmount);
         assertEq(shareToken.balanceOf(user1), 0);
     }
@@ -827,17 +757,17 @@ contract HyperVaultRouterTest is Test {
         mockTVL(10e18);
 
         mockRate(20e6); // 1 PURR = 20 USDC
-        
+
         vm.startPrank(user1);
         purr.approve(address(router), depositAmount);
         uint256 shares = router.deposit(address(purr), depositAmount, 0);
-        
+
         // Mock TVL to be 100 USDC
         mockTVL(200e18 + 10e18);
-        
+
         // Approve router to burn shares
         shareToken.approve(address(router), shares);
-        
+
         // Redeem all shares should fail
         vm.expectRevert(); // Should revert with FETCH_ASSETS_FAILED
         router.redeem(shares, 0);
@@ -909,4 +839,4 @@ contract HyperVaultRouterTest is Test {
         router.redeem(shares, 0);
         vm.stopPrank();
     }
-} 
+}

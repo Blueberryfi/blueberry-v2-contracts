@@ -85,7 +85,7 @@ abstract contract EscrowAssetStorage is IHyperliquidCommon {
         require(assetBalance == 0, Errors.INSUFFICIENT_BALANCE());
         require(_spotAssetBalance(assetIndex) == 0, Errors.INSUFFICIENT_BALANCE());
         require(_inflightBalance(assetIndex) == 0, Errors.INSUFFICIENT_BALANCE());
-    
+
         // Remove the asset from the set of supported assets
         $.supportedAssets.remove(assetIndex);
         delete $.assetDetails[assetIndex];

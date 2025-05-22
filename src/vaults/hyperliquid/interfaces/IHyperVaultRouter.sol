@@ -97,4 +97,10 @@ interface IHyperVaultRouter is IHyperliquidCommon {
 
     /// @notice Returns the max number of shares able to be redeemed
     function maxRedeemable() external view returns (uint256);
+
+    /// @notice Returns the amount of shares that will be minted for a given amount of asset
+    function previewDeposit(address asset, uint256 amount) external view returns (uint256 shares);
+
+    /// @notice Returns the amount of withdraw asset that will be received for a given amount of shares
+    function previewRedeem(uint256 shares) external view returns (uint256 amount);
 }

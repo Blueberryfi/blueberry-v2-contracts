@@ -37,7 +37,7 @@ contract DeployRouterTestnet is Script {
         // //// Deployment steps ////
 
         // 1. Compute the expected address of the vault wrapper
-        address expectedRouter = LibRLP.computeAddress(deployer, vm.getNonce(deployer) + 4 + escrowCounts);
+        address expectedRouter = LibRLP.computeAddress(deployer, vm.getNonce(deployer) + 6 + escrowCounts);
 
         // 2. Deploy Share Token & Mock Asset
         WrappedVaultShare shareToken = new WrappedVaultShare("Wrapped HLP", "wHLP", expectedRouter, deployer);
@@ -93,7 +93,7 @@ contract DeployRouterTestnet is Script {
 
         require(address(router) == expectedRouter, "Router address mismatch");
 
-        //ERC20(PURR).approve(address(router), type(uint256).max);
+        ERC20(PURR).approve(address(router), type(uint256).max);
 
         console.log("Router Proxy deployed at", address(router));
 
