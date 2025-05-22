@@ -191,6 +191,17 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
         L1_WRITE_PRECOMPILE.sendVaultTransfer(L1_VAULT, false, amount);
     }
 
+    /*///////////////////////////////////////////////////////////////
+                            Internal Functions
+    //////////////////////////////////////////////////////////////*/
+
+    /// @inheritdoc EscrowAssetStorage
+    function _inflightBalance(uint64 assetIndex) internal view override returns (uint256) {
+        V1L1EscrowActionsStorage storage $ = _getV1L1EscrowActionsStorage();
+        if (block.number != $.inFlightBridge[assetIndex].blockNumber) return 0;
+        return $.inFlightBridge[assetIndex].amount;
+    }
+
     /*//////////////////////////////////////////////////////////////
                             View Functions
     //////////////////////////////////////////////////////////////*/
