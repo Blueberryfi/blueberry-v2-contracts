@@ -106,6 +106,8 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
     uint24 public constant CORE_WRITER_ACTION_SPOT_SEND = 6;
     uint24 public constant CORE_WRITER_ACTION_USD_CLASS_TRANSFER = 7;
 
+    uint8 public constant LIMIT_ORDER_TIF_ALO = 1;
+    uint8 public constant LIMIT_ORDER_TIF_GTC = 2;
     uint8 public constant LIMIT_ORDER_TIF_IOC = 3;
 
     /*==== Additional Constants ====*/
@@ -186,8 +188,9 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      * @param isBuy Whether to buy or sell
      * @param limitPx The limit price
      * @param sz The size of the trade
+     * @param tif The time in force for the order, 1 = Alo, 2 = Gtc, 3 = IOC
      */
-    function trade(uint32 assetIndex, bool isBuy, uint64 limitPx, uint64 sz)
+    function trade(uint32 assetIndex, bool isBuy, uint64 limitPx, uint64 sz, uint8 tif)
         external
         onlyRole(LIQUIDITY_ADMIN_ROLE)
         singleActionBlock
@@ -195,7 +198,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
         V1AssetStorage storage $ = _getV1AssetStorage();
         require($.supportedAssets.contains(assetIndex), Errors.COLLATERAL_NOT_SUPPORTED());
         uint32 iocIndex = SPOT_MARKET_INDEX_OFFSET + $.assetDetails[assetIndex].spotMarket;
-        _limitOrder(iocIndex, isBuy, limitPx, sz);
+        _limitOrder(iocIndex, isBuy, limitPx, sz, tif);
     }
 
     /**
@@ -306,7 +309,8 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      * @param limitPx The limit price
      * @param sz The size of the trade
      */
-    function _limitOrder(uint32 iocIndex, bool isBuy, uint64 limitPx, uint64 sz) internal {
+    function _limitOrder(uint32 iocIndex, bool isBuy, uint64 limitPx, uint64 sz, uint8 tif) internal {
+        require(tif == LIMIT_ORDER_TIF_ALO || tif == LIMIT_ORDER_TIF_GTC || tif == LIMIT_ORDER_TIF_IOC, Errors.INVALID_TIF());
         LimitOrderParams memory params = LimitOrderParams({
             asset: iocIndex,
             isBuy: isBuy,

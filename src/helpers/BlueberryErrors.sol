@@ -95,4 +95,7 @@ library BlueberryErrors {
 
     /// @notice Error thrown when slippage is too high and the minimum amount is not met
     error SLIPPAGE_TOO_HIGH();
+
+    /// @notice Error thrown when the TIF (Time in Force) is invalid
+    error INVALID_TIF();
 }
