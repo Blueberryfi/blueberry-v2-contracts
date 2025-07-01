@@ -8,7 +8,7 @@ import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 import {BlueberryErrors as Errors} from "@blueberry-v2/helpers/BlueberryErrors.sol";
 
 import {EscrowAssetStorage} from "@blueberry-v2/vaults/hyperliquid/EscrowAssetStorage.sol";
-import {IL1Write} from "@blueberry-v2/vaults/hyperliquid/interfaces/IL1Write.sol";
+import {ICoreWriter} from "@blueberry-v2/vaults/hyperliquid/interfaces/ICoreWriter.sol";
 
 /**
  * @title L1EscrowActions
@@ -28,6 +28,52 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
         uint64 blockNumber;
         /// @notice The amount of the asset that is in-flight to L1
         uint256 amount;
+    }
+
+    /// @notice Struct that encodes the params for sending tokens to spot accounts
+    struct SpotSendParams {
+        /// @notice Destination address to send the asset to
+        address destination;
+        /// @notice The index of the asset to send
+        uint64 token;
+        /// @notice The amount of the asset to send
+        uint64 _wei;
+    }
+
+    /// @notice Struct that encodes the params for transferring USDC between perp & spot accounts
+    struct UsdClassTransferParams {
+        /// @notice Amount of USDC to transfer
+        uint64 ntl;
+        /// @notice True if transferring from spot to perp, false if transferring from perp to spot
+        bool toPerp;
+    }
+
+    /// @notice Struct that encodes the params depositing or withdrawing from a vault
+    struct VaultTransferParams {
+        /// @notice Address of the target vault
+        address vault;
+        /// @notice True if depositing to the vault, false if withdrawing from the vault
+        bool isDeposit;
+        /// @notice Amount of USDC to deposit or withdraw
+        uint64 usd;
+    }
+
+    /// @notice Struct that encodes the params for a limit order
+    struct LimitOrderParams {
+        /// @notice The index of the asset to trade
+        uint32 asset;
+        /// @notice True if the order is a buy order, false if it is a sell order
+        bool isBuy;
+        /// @notice The price at which the order should be executed
+        uint64 limitPx;
+        /// @notice The amount of the asset to trade
+        uint64 sz;
+        /// @notice True to reduce or close a position, false to open a new position
+        bool reduceOnly;
+        /// @notice The time in force for the order, 1 = Alo, 2 = Gtc, 3 = IOC
+        uint8 encodedTif;
+        /// @notice Client Order ID; 0 if not used
+        uint128 cloid;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -51,7 +97,18 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
     /*==== Precompile Addresses ====*/
 
     /// @notice The address of the write precompile, used for sending transactions to the L1.
-    IL1Write public constant L1_WRITE_PRECOMPILE = IL1Write(0x3333333333333333333333333333333333333333);
+    ICoreWriter public constant L1_CORE_WRITER = ICoreWriter(0x3333333333333333333333333333333333333333);
+
+    uint8 public constant CORE_WRITER_VERSION_1 = 1;
+
+    uint24 public constant CORE_WRITER_ACTION_LIMIT_ORDER = 1;
+    uint24 public constant CORE_WRITER_ACTION_VAULT_TRANSFER = 2;
+    uint24 public constant CORE_WRITER_ACTION_SPOT_SEND = 6;
+    uint24 public constant CORE_WRITER_ACTION_USD_CLASS_TRANSFER = 7;
+
+    uint8 public constant LIMIT_ORDER_TIF_ALO = 1;
+    uint8 public constant LIMIT_ORDER_TIF_GTC = 2;
+    uint8 public constant LIMIT_ORDER_TIF_IOC = 3;
 
     /*==== Additional Constants ====*/
 
@@ -120,7 +177,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      */
     function bridgeFromL1(uint64 assetIndex, uint64 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
         require(isAssetSupported(assetIndex), Errors.COLLATERAL_NOT_SUPPORTED());
-        L1_WRITE_PRECOMPILE.sendSpot(_assetSystemAddr(assetIndex), assetIndex, amount);
+        _spotSend(assetIndex, amount);
     }
 
     /**
@@ -131,8 +188,9 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      * @param isBuy Whether to buy or sell
      * @param limitPx The limit price
      * @param sz The size of the trade
+     * @param tif The time in force for the order, 1 = Alo, 2 = Gtc, 3 = IOC
      */
-    function trade(uint32 assetIndex, bool isBuy, uint64 limitPx, uint64 sz)
+    function trade(uint32 assetIndex, bool isBuy, uint64 limitPx, uint64 sz, uint8 tif)
         external
         onlyRole(LIQUIDITY_ADMIN_ROLE)
         singleActionBlock
@@ -140,7 +198,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
         V1AssetStorage storage $ = _getV1AssetStorage();
         require($.supportedAssets.contains(assetIndex), Errors.COLLATERAL_NOT_SUPPORTED());
         uint32 iocIndex = SPOT_MARKET_INDEX_OFFSET + $.assetDetails[assetIndex].spotMarket;
-        L1_WRITE_PRECOMPILE.sendIocOrder(iocIndex, isBuy, limitPx, sz);
+        _limitOrder(iocIndex, isBuy, limitPx, sz, tif);
     }
 
     /**
@@ -150,7 +208,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      * @param amount The amount of USDC in spot to transfer
      */
     function spotToPerps(uint64 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
-        L1_WRITE_PRECOMPILE.sendUsdClassTransfer(amount, true);
+        _usdClassTransfer(amount, true);
     }
 
     /**
@@ -160,7 +218,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      * @param amount The amount of USDC in perps to transfer
      */
     function perpsToSpot(uint64 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
-        L1_WRITE_PRECOMPILE.sendUsdClassTransfer(amount, false);
+        _usdClassTransfer(amount, false);
     }
 
     /**
@@ -170,7 +228,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      * @param amount The amount of USDC in perps to deposit
      */
     function vaultDeposit(uint64 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
-        L1_WRITE_PRECOMPILE.sendVaultTransfer(L1_VAULT, true, amount);
+        _vaultTransfer(amount, true);
     }
 
     /**
@@ -180,7 +238,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      * @param amount The amount of USDC in perps to withdraw
      */
     function vaultWithdraw(uint64 amount) external onlyRole(LIQUIDITY_ADMIN_ROLE) singleActionBlock {
-        L1_WRITE_PRECOMPILE.sendVaultTransfer(L1_VAULT, false, amount);
+        _vaultTransfer(amount, false);
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -192,6 +250,82 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
         V1L1EscrowActionsStorage storage $ = _getV1L1EscrowActionsStorage();
         if (block.number != $.inFlightBridge[assetIndex].blockNumber) return 0;
         return $.inFlightBridge[assetIndex].amount;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        Write Precompile Functions
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Encodes and sends SpotSendParams w/ a spot send action to the L1 Core Writer
+     * @param assetIndex The index of the asset to send
+     * @param amount The amount of the asset to send
+     */
+    function _spotSend(uint64 assetIndex, uint64 amount) internal {
+        SpotSendParams memory action =
+            SpotSendParams({destination: _assetSystemAddr(assetIndex), token: assetIndex, _wei: amount});
+        L1_CORE_WRITER.sendRawAction(_encodeSpotSend(action));
+    }
+
+    /// @notice Encodes SpotSendParams into bytes for sending to the L1 Core Writer
+    function _encodeSpotSend(SpotSendParams memory params) internal pure returns (bytes memory) {
+        return abi.encodePacked(CORE_WRITER_VERSION_1, CORE_WRITER_ACTION_SPOT_SEND, abi.encode(params));
+    }
+
+    /**
+     *  @notice Encodes and sends UsdClassTransferParams w/ a usd class transfer action to the L1 Core Writer
+     *  @param amount The amount of USDC to transfer
+     *  @param toPerp True if transferring from spot to perp, false if transferring from perp to spot
+     */
+    function _usdClassTransfer(uint64 amount, bool toPerp) internal {
+        UsdClassTransferParams memory params = UsdClassTransferParams(amount, toPerp);
+        L1_CORE_WRITER.sendRawAction(_encodeUsdClassTransfer(params));
+    }
+
+    /// @notice Encodes UsdClassTransferParams into bytes for sending to the L1 Core Writer
+    function _encodeUsdClassTransfer(UsdClassTransferParams memory params) internal pure returns (bytes memory) {
+        return abi.encodePacked(CORE_WRITER_VERSION_1, CORE_WRITER_ACTION_USD_CLASS_TRANSFER, abi.encode(params));
+    }
+
+    /**
+     *  @notice Encodes and sends VaultTransferParams w/ a vault transfer action to the L1 Core Writer
+     *  @param amount The amount of USDC to deposit or withdraw
+     *  @param isDeposit True if depositing to the vault, false if withdrawing from the vault
+     */
+    function _vaultTransfer(uint64 amount, bool isDeposit) internal {
+        VaultTransferParams memory params = VaultTransferParams({vault: L1_VAULT, isDeposit: isDeposit, usd: amount});
+        L1_CORE_WRITER.sendRawAction(_encodeVaultTransfer(params));
+    }
+
+    /// @notice Encodes UsdClassTransferParams into bytes for sending to the L1 Core Writer
+    function _encodeVaultTransfer(VaultTransferParams memory params) internal pure returns (bytes memory) {
+        return abi.encodePacked(CORE_WRITER_VERSION_1, CORE_WRITER_ACTION_VAULT_TRANSFER, abi.encode(params));
+    }
+
+    /**
+     * @notice Encodes and sends LimitOrderParams w/ a limit order action to the L1 Core Writer
+     * @param iocIndex The index of the asset to trade
+     * @param isBuy Whether to buy or sell
+     * @param limitPx The limit price
+     * @param sz The size of the trade
+     */
+    function _limitOrder(uint32 iocIndex, bool isBuy, uint64 limitPx, uint64 sz, uint8 tif) internal {
+        require(tif == LIMIT_ORDER_TIF_ALO || tif == LIMIT_ORDER_TIF_GTC || tif == LIMIT_ORDER_TIF_IOC, Errors.INVALID_TIF());
+        LimitOrderParams memory params = LimitOrderParams({
+            asset: iocIndex,
+            isBuy: isBuy,
+            limitPx: limitPx,
+            sz: sz,
+            reduceOnly: false,
+            encodedTif: LIMIT_ORDER_TIF_IOC,
+            cloid: 0
+        });
+        L1_CORE_WRITER.sendRawAction(_encodeLimitOrderParams(params));
+    }
+
+    /// @notice Encodes a LimitOrderParams into bytes for sending to the L1 Core Writer
+    function _encodeLimitOrderParams(LimitOrderParams memory params) internal pure returns (bytes memory) {
+        return abi.encodePacked(CORE_WRITER_VERSION_1, CORE_WRITER_ACTION_LIMIT_ORDER, abi.encode(params));
     }
 
     /*//////////////////////////////////////////////////////////////
