@@ -1,0 +1,5 @@
+@blueberry-v2/=src/
+@openzeppelin-contracts-upgradeable/=dependencies/@openzeppelin-contracts-upgradeable-5.2.0/
+@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.2.0/
+@solmate/=dependencies/solmate-6.8.0/src/
+@solady/=dependencies/solady-0.1.12/src/

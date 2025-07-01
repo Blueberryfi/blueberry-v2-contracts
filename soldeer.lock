@@ -1,0 +1,27 @@
+[[dependencies]]
+name = "@openzeppelin-contracts"
+version = "5.2.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts/5_2_0_11-01-2025_09:30:20_contracts.zip"
+checksum = "6dbd0440446b2ed16ca25e9f1af08fc0c5c1e73e71fee86ae8a00daa774e3817"
+integrity = "4cb7f3777f67fdf4b7d0e2f94d2f93f198b2e5dce718b7062ac7c2c83e1183bd"
+
+[[dependencies]]
+name = "@openzeppelin-contracts-upgradeable"
+version = "5.2.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts-upgradeable/5_2_0_11-01-2025_09:30:25_contracts-upgradeable.zip"
+checksum = "25d9cf22b6f4d8da7975f24234eefbf6c71348464ea74c8fdd481be3811767f5"
+integrity = "498747bedc3f757976da0b6125d26a63e79bb2b4dbabd8ecd2547e809a2fa27e"
+
+[[dependencies]]
+name = "solady"
+version = "0.1.12"
+url = "https://soldeer-revisions.s3.amazonaws.com/solady/0_1_12_11-03-2025_11:14:32_solady.zip"
+checksum = "87d3f8c0443f6a34267c9dd8acf4f0a788379aa34b6f78d0c4c086ef0dd6a679"
+integrity = "81dfe91a4a5693db197d3f77f399215f433e5ad8cad25e5e7c77d103965f44c7"
+
+[[dependencies]]
+name = "solmate"
+version = "6.8.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/solmate/6_8_0_29-10-2024_19:01:45_solmate.zip"
+checksum = "e3ec0f0182cb3bbedecf8a0bcc39897266534a795ec732b2b03dafa285d78a5b"
+integrity = "a22e5a352de0231f671ee8adf5667bbe83c50012670083987bd1099a69feb429"
