@@ -317,7 +317,7 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
             limitPx: limitPx,
             sz: sz,
             reduceOnly: false,
-            encodedTif: LIMIT_ORDER_TIF_IOC,
+            encodedTif: tif,
             cloid: 0
         });
         L1_CORE_WRITER.sendRawAction(_encodeLimitOrderParams(params));
