@@ -310,7 +310,9 @@ abstract contract L1EscrowActions is EscrowAssetStorage, AccessControlUpgradeabl
      * @param sz The size of the trade
      */
     function _limitOrder(uint32 iocIndex, bool isBuy, uint64 limitPx, uint64 sz, uint8 tif) internal {
-        require(tif == LIMIT_ORDER_TIF_ALO || tif == LIMIT_ORDER_TIF_GTC || tif == LIMIT_ORDER_TIF_IOC, Errors.INVALID_TIF());
+        require(
+            tif == LIMIT_ORDER_TIF_ALO || tif == LIMIT_ORDER_TIF_GTC || tif == LIMIT_ORDER_TIF_IOC, Errors.INVALID_TIF()
+        );
         LimitOrderParams memory params = LimitOrderParams({
             asset: iocIndex,
             isBuy: isBuy,
