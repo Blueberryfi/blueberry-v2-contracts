@@ -273,7 +273,7 @@ contract HyperVaultRouter is IHyperVaultRouter, Ownable2StepUpgradeable, Reentra
         }
 
         // Calculate the evm Decimals using the evmExtraWeiDecimals returned from the tokenInfo
-        uint8 evmDecimals =  uint8(int8(info.weiDecimals) + info.evmExtraWeiDecimals);
+        uint8 evmDecimals = uint8(int8(info.weiDecimals) + info.evmExtraWeiDecimals);
 
         AssetDetails memory details = AssetDetails({
             evmContract: info.evmContract,
